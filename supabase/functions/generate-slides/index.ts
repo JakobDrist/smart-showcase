@@ -60,6 +60,32 @@ serve(async (req) => {
   const writer = responseStream.writable.getWriter();
 
   try {
+    // Først opretter vi storage bucket hvis det ikke eksisterer
+    try {
+      const { data: buckets } = await supabase
+        .storage
+        .listBuckets();
+      
+      const bucketExists = buckets?.some(bucket => bucket.name === 'presentation_images');
+      
+      if (!bucketExists) {
+        const { error: createBucketError } = await supabase
+          .storage
+          .createBucket('presentation_images', {
+            public: true,
+            allowedMimeTypes: ['image/png', 'image/jpeg'],
+            fileSizeLimit: 5242880, // 5MB
+          });
+
+        if (createBucketError) {
+          throw createBucketError;
+        }
+      }
+    } catch (bucketError) {
+      console.error('Error managing storage bucket:', bucketError);
+      throw new Error('Failed to setup storage bucket');
+    }
+
     const { outline, language } = await req.json();
 
     if (!outline || !Array.isArray(outline)) {

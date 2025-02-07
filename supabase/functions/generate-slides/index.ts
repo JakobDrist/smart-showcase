@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
@@ -153,6 +152,7 @@ serve(async (req) => {
         .from('presentation_images')
         .getPublicUrl(filePath);
 
+      // Start content generation with streaming
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -182,9 +182,34 @@ serve(async (req) => {
       }
 
       let slideContent = '';
-      for await (const chunk of streamOpenAIResponse(response)) {
-        slideContent += chunk;
-        await writer.write(encoder.encode(`data: ${JSON.stringify({ type: 'content', slide: index, content: chunk })}\n\n`));
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.trim() === '') continue;
+          if (line.trim() === 'data: [DONE]') continue;
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(5));
+              if (data.choices[0].delta.content) {
+                const content = data.choices[0].delta.content;
+                slideContent += content;
+                await writer.write(encoder.encode(
+                  `data: ${JSON.stringify({ type: 'content', slide: index, content })}\n\n`
+                ));
+              }
+            } catch (e) {
+              console.error('Error parsing stream:', e);
+            }
+          }
+        }
       }
 
       const { error: slideError } = await supabase
@@ -212,10 +237,14 @@ serve(async (req) => {
         throw slideError;
       }
 
-      await writer.write(encoder.encode(`data: ${JSON.stringify({ type: 'slide-complete', slide: index })}\n\n`));
+      await writer.write(encoder.encode(
+        `data: ${JSON.stringify({ type: 'slide-complete', slide: index })}\n\n`
+      ));
     }
 
-    await writer.write(encoder.encode(`data: ${JSON.stringify({ type: 'complete', presentationId: presentation.id })}\n\n`));
+    await writer.write(encoder.encode(
+      `data: ${JSON.stringify({ type: 'complete', presentationId: presentation.id })}\n\n`
+    ));
     await writer.close();
 
     return new Response(responseStream.readable, {
@@ -228,7 +257,9 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error('Error in generate-slides function:', error);
-    await writer.write(encoder.encode(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`));
+    await writer.write(encoder.encode(
+      `data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`
+    ));
     await writer.close();
     return new Response(responseStream.readable, {
       headers: {

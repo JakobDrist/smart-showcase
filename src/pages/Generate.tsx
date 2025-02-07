@@ -24,27 +24,46 @@ const Generate = () => {
   const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [outline, setOutline] = useState<OutlineItem[]>([]);
+  const [slideCount, setSlideCount] = useState("8");
+  const [language, setLanguage] = useState("da");
 
   const handleGenerate = async () => {
-    setIsGenerating(true);
-    // Mock outline generation for now
-    const mockOutline = [
-      { id: 1, title: "Tesla: Driving the Future of Electric Vehicles" },
-      { id: 2, title: "History and Founding of Tesla" },
-      { id: 3, title: "Tesla's Innovative Electric Vehicle Technology" },
-      { id: 4, title: "Tesla's Autopilot and Self-Driving Capabilities" },
-      { id: 5, title: "Tesla's Supercharger Network and Battery Technology" },
-      { id: 6, title: "Tesla's Expansion into Energy Generation and Storage" },
-    ];
-
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    setOutline(mockOutline);
-    setIsGenerating(false);
+    if (!prompt) return;
     
-    toast({
-      title: "Disposition genereret",
-      description: "Du kan nu redigere dispositionen før den endelige generering.",
-    });
+    setIsGenerating(true);
+    try {
+      const response = await fetch('/functions/v1/generate-outline', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt,
+          slideCount: parseInt(slideCount),
+          language,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Fejl ved generering af disposition');
+      }
+
+      const data = await response.json();
+      setOutline(data.outline);
+      
+      toast({
+        title: "Disposition genereret",
+        description: "Du kan nu redigere dispositionen før den endelige generering.",
+      });
+    } catch (error) {
+      toast({
+        title: "Fejl",
+        description: error.message || "Der opstod en fejl ved generering af disposition",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
@@ -75,7 +94,7 @@ const Generate = () => {
                   className="w-full pl-4 pr-10 py-2 rounded-lg"
                 />
                 <RotateCw
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 cursor-pointer"
                   onClick={() => setPrompt("")}
                 />
               </div>
@@ -83,7 +102,10 @@ const Generate = () => {
 
             <div>
               <label className="block text-sm font-medium mb-2">Antal slides</label>
-              <Select defaultValue="8">
+              <Select 
+                value={slideCount} 
+                onValueChange={setSlideCount}
+              >
                 <SelectTrigger className="w-[120px]">
                   <SelectValue placeholder="Vælg antal" />
                 </SelectTrigger>
@@ -98,7 +120,10 @@ const Generate = () => {
 
             <div>
               <label className="block text-sm font-medium mb-2">Sprog</label>
-              <Select defaultValue="da">
+              <Select 
+                value={language} 
+                onValueChange={setLanguage}
+              >
                 <SelectTrigger className="w-[140px]">
                   <SelectValue placeholder="Vælg sprog" />
                 </SelectTrigger>

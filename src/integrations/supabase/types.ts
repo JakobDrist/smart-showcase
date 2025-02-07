@@ -34,10 +34,16 @@ export type Database = {
         Row: {
           accent_color: string | null
           background_image: string | null
+          background_type: string | null
+          bullet_style: string | null
           content: string
           created_at: string
+          gradient: string | null
+          grid_layout: string | null
+          icon_style: string | null
           id: string
           layout: string | null
+          number_style: string | null
           position: number
           presentation_id: string | null
           style: Json | null
@@ -47,10 +53,16 @@ export type Database = {
         Insert: {
           accent_color?: string | null
           background_image?: string | null
+          background_type?: string | null
+          bullet_style?: string | null
           content: string
           created_at?: string
+          gradient?: string | null
+          grid_layout?: string | null
+          icon_style?: string | null
           id?: string
           layout?: string | null
+          number_style?: string | null
           position: number
           presentation_id?: string | null
           style?: Json | null
@@ -60,10 +72,16 @@ export type Database = {
         Update: {
           accent_color?: string | null
           background_image?: string | null
+          background_type?: string | null
+          bullet_style?: string | null
           content?: string
           created_at?: string
+          gradient?: string | null
+          grid_layout?: string | null
+          icon_style?: string | null
           id?: string
           layout?: string | null
+          number_style?: string | null
           position?: number
           presentation_id?: string | null
           style?: Json | null

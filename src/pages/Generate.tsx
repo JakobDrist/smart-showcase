@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,14 @@ interface OutlineItem {
   title: string;
 }
 
+interface StreamUpdate {
+  type: 'content' | 'slide-complete' | 'complete' | 'error';
+  slide?: number;
+  content?: string;
+  presentationId?: string;
+  message?: string;
+}
+
 const Generate = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -28,6 +36,7 @@ const Generate = () => {
   const [generationStep, setGenerationStep] = useState<string>("");
   const [generationProgress, setGenerationProgress] = useState(0);
   const [outline, setOutline] = useState<OutlineItem[]>([]);
+  const [slideContent, setSlideContent] = useState<string[]>([]);
   const [slideCount, setSlideCount] = useState("8");
   const [language, setLanguage] = useState("da");
 
@@ -53,8 +62,6 @@ const Generate = () => {
 
       setOutline(data.outline);
       setGenerationProgress(50);
-      setIsGenerating(false); // Reset generating state after success
-      
       toast({
         title: "Disposition genereret",
         description: "Du kan nu redigere dispositionen før den endelige generering.",
@@ -66,8 +73,9 @@ const Generate = () => {
         description: error.message || "Der opstod en fejl ved generering af disposition",
         variant: "destructive",
       });
-      setIsGenerating(false);
       setGenerationProgress(0);
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -76,30 +84,76 @@ const Generate = () => {
 
     setIsGenerating(true);
     setGenerationStep("Genererer præsentation...");
-    setGenerationProgress(75);
+    setGenerationProgress(0);
+    setSlideContent(new Array(outline.length).fill(''));
 
     try {
-      const { data, error } = await supabase.functions.invoke('generate-slides', {
-        body: {
-          outline,
-          language,
-        },
+      const response = await supabase.functions.invoke('generate-slides', {
+        body: { outline, language },
+        headers: { 'Accept': 'text/event-stream' },
       });
 
-      if (error) {
-        throw error;
-      }
+      if (!response.data) throw new Error('No response data');
 
-      setGenerationProgress(100);
-      setIsGenerating(false); // Reset generating state after success
+      const reader = new ReadableStreamDefaultReader(response.data as unknown as ReadableStream);
+      const decoder = new TextDecoder();
+      let buffer = '';
       
-      toast({
-        title: "Præsentation genereret",
-        description: "Din præsentation er klar!",
-      });
-
-      // Navigate to editor with the new presentation
-      navigate(`/editor/${data.presentationId}`);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        
+        for (const line of lines) {
+          if (line.trim() === '') continue;
+          if (line.startsWith('data: ')) {
+            try {
+              const update: StreamUpdate = JSON.parse(line.slice(5));
+              
+              switch (update.type) {
+                case 'content':
+                  if (typeof update.slide === 'number' && update.content) {
+                    setSlideContent(prev => {
+                      const newContent = [...prev];
+                      newContent[update.slide!] = (newContent[update.slide!] || '') + update.content;
+                      return newContent;
+                    });
+                    setGenerationProgress(
+                      Math.min(100, ((update.slide! + 1) / outline.length) * 100)
+                    );
+                  }
+                  break;
+                
+                case 'slide-complete':
+                  if (typeof update.slide === 'number') {
+                    setGenerationStep(`Slide ${update.slide + 1}/${outline.length} færdig`);
+                  }
+                  break;
+                
+                case 'complete':
+                  if (update.presentationId) {
+                    setGenerationProgress(100);
+                    setGenerationStep("Præsentation færdig!");
+                    toast({
+                      title: "Præsentation genereret",
+                      description: "Din præsentation er klar!",
+                    });
+                    navigate(`/editor/${update.presentationId}`);
+                  }
+                  break;
+                
+                case 'error':
+                  throw new Error(update.message || 'Unknown error');
+              }
+            } catch (e) {
+              console.error('Error parsing stream update:', e);
+            }
+          }
+        }
+      }
     } catch (error) {
       console.error('Error generating presentation:', error);
       toast({
@@ -107,8 +161,8 @@ const Generate = () => {
         description: error.message || "Der opstod en fejl ved generering af præsentationen",
         variant: "destructive",
       });
+    } finally {
       setIsGenerating(false);
-      setGenerationProgress(0);
     }
   };
 
@@ -127,13 +181,22 @@ const Generate = () => {
         </div>
 
         <div className="max-w-3xl mx-auto">
-          <h1 className="text-3xl font-bold text-center mb-8">Generer</h1>
+          <h1 className="text-3xl font-bold text-center mb-8">Generer præsentation</h1>
 
           {isGenerating && (
             <div className="mb-8 text-center">
               <h2 className="text-xl font-semibold mb-4">{generationStep}</h2>
               <Progress value={generationProgress} className="mb-2" />
-              <p className="text-sm text-gray-600">{generationProgress}% færdig</p>
+              <p className="text-sm text-gray-600">{Math.round(generationProgress)}% færdig</p>
+              
+              {slideContent.map((content, index) => (
+                content && (
+                  <div key={index} className="mt-4 p-4 bg-white/50 rounded-lg">
+                    <h3 className="font-semibold mb-2">Slide {index + 1}</h3>
+                    <p className="text-sm text-gray-700">{content}</p>
+                  </div>
+                )
+              ))}
             </div>
           )}
 

@@ -22,10 +22,42 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+async function* streamOpenAIResponse(response: Response) {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('No response body');
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (line.trim() === '') continue;
+      if (line.trim() === 'data: [DONE]') return;
+      if (line.startsWith('data: ')) {
+        const data = JSON.parse(line.slice(5));
+        if (data.choices[0].delta.content) {
+          yield data.choices[0].delta.content;
+        }
+      }
+    }
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const encoder = new TextEncoder();
+  const responseStream = new TransformStream();
+  const writer = responseStream.writable.getWriter();
 
   try {
     const { outline, language } = await req.json();
@@ -49,7 +81,6 @@ serve(async (req) => {
 
     console.log('Created presentation:', presentation);
 
-    const slides = [];
     for (const [index, slide] of outline.entries()) {
       // Generate an engaging image for the slide
       const imagePrompt = `Create a modern, minimalist presentation slide background image for topic: ${slide.title}. The image should be subtle and not interfere with text overlay.`;
@@ -98,29 +129,7 @@ serve(async (req) => {
         .from('presentation_images')
         .getPublicUrl(filePath);
 
-      // Generate enhanced content for the slide with a very strict system prompt
-      const systemPrompt = `You are a professional presentation expert.
-      Your task is to generate content for a slide titled "${slide.title}" in ${language === 'da' ? 'Danish' : 'English'}.
-      You MUST format your response as a valid JSON object with this exact structure:
-      {
-        "points": ["point 1", "point 2", "point 3"],
-        "diagram": null,
-        "data": null,
-        "layout": "vertical"
-      }
-      
-      Rules:
-      - points array MUST contain between 1-5 bullet points
-      - diagram MUST be either null, "pie", "bar", or "line"
-      - data MUST be null if diagram is null
-      - layout MUST be either "grid", "vertical", or "horizontal"
-      - ALL points must be strings, no nested objects or arrays
-      - Do NOT include any markdown or special formatting in the points
-      
-      Return ONLY the JSON object, no other text.`;
-
-      console.log(`Generating content for slide ${index + 1}:`, slide.title);
-
+      // Stream content generation for each slide
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -130,62 +139,49 @@ serve(async (req) => {
         body: JSON.stringify({
           model: 'gpt-4o-mini',
           messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: `Generate content for presentation slide: ${slide.title}` }
+            { 
+              role: 'system', 
+              content: `You are a professional presentation expert. Generate content for slide titled "${slide.title}" in ${language === 'da' ? 'Danish' : 'English'}. Focus on creating clear, concise points.`
+            },
+            { 
+              role: 'user', 
+              content: `Generate content for presentation slide: ${slide.title}`
+            }
           ],
-          temperature: 0.7,
+          stream: true,
         }),
       });
 
       if (!response.ok) {
-        const errorData = await response.text();
-        console.error('OpenAI API error:', errorData);
-        throw new Error(`OpenAI API error: ${response.status} ${errorData}`);
+        const error = await response.text();
+        console.error('OpenAI API error:', error);
+        throw new Error(`OpenAI API error: ${error}`);
       }
 
-      const data = await response.json();
-      console.log('OpenAI raw response:', data.choices[0].message.content);
-      
-      let contentData;
-      try {
-        contentData = JSON.parse(data.choices[0].message.content.trim());
-        
-        // Validate the response structure
-        if (!Array.isArray(contentData.points) || 
-            !contentData.points.every(point => typeof point === 'string') ||
-            !['grid', 'vertical', 'horizontal'].includes(contentData.layout) ||
-            ![null, 'pie', 'bar', 'line'].includes(contentData.diagram)) {
-          throw new Error('Invalid response structure');
-        }
-      } catch (error) {
-        console.error('Error parsing or validating OpenAI response:', error);
-        console.error('Raw response content:', data.choices[0].message.content);
-        throw new Error('Failed to parse or validate OpenAI response');
+      let slideContent = '';
+      for await (const chunk of streamOpenAIResponse(response)) {
+        slideContent += chunk;
+        await writer.write(encoder.encode(`data: ${JSON.stringify({ type: 'content', slide: index, content: chunk })}\n\n`));
       }
 
-      // Format the content based on the AI response
-      const formattedContent = contentData.points.map(point => `• ${point}`).join('\n');
-
-      // Insert the slide with enhanced styling
+      // Insert the slide with the streamed content
       const { error: slideError } = await supabase
         .from('slides')
         .insert({
           presentation_id: presentation.id,
           position: index,
           title: slide.title,
-          content: formattedContent,
+          content: slideContent,
           background_image: publicUrl,
           background_type: 'image',
           style: {
             titleColor: '#ffffff',
             contentColor: '#ffffff',
             fontSize: 'text-xl',
-            diagram: contentData.diagram,
-            diagramData: contentData.data,
-            layout: contentData.layout,
+            layout: 'vertical',
           },
           bullet_style: 'circle',
-          grid_layout: contentData.layout || 'vertical',
+          grid_layout: 'vertical',
           gradient: 'linear-gradient(90deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.6) 100%)',
         });
 
@@ -193,31 +189,32 @@ serve(async (req) => {
         console.error('Error creating slide:', slideError);
         throw slideError;
       }
-      
-      slides.push({
-        title: slide.title,
-        content: formattedContent,
-        background_image: publicUrl,
-        style: {
-          diagram: contentData.diagram,
-          diagramData: contentData.data,
-          layout: contentData.layout,
-        }
-      });
+
+      await writer.write(encoder.encode(`data: ${JSON.stringify({ type: 'slide-complete', slide: index })}\n\n`));
     }
 
-    return new Response(
-      JSON.stringify({ presentationId: presentation.id, slides }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    await writer.write(encoder.encode(`data: ${JSON.stringify({ type: 'complete', presentationId: presentation.id })}\n\n`));
+    await writer.close();
+
+    return new Response(responseStream.readable, {
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
   } catch (error) {
     console.error('Error in generate-slides function:', error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    );
+    await writer.write(encoder.encode(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`));
+    await writer.close();
+    return new Response(responseStream.readable, {
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
   }
 });

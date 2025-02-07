@@ -54,14 +54,12 @@ serve(async (req) => {
     // Generate content for each slide
     const slides = [];
     for (const [index, slide] of outline.entries()) {
-      const prompt = `
-        You are an expert in creating presentation slides. 
-        Generate content for a slide with the title "${slide.title}".
-        The language should be in ${language === 'da' ? 'Danish' : 'English'}.
-        The content should be concise and precise, perfect for a presentation.
-        Format the text with simple markdown bullet points.
-        Maximum 5 bullet points.
-      `;
+      const systemPrompt = `Du er en professionel præsentationsekspert.
+      Generer indhold til et slide med titlen "${slide.title}".
+      Sproget skal være på ${language === 'da' ? 'dansk' : 'engelsk'}.
+      Indholdet skal være kortfattet og præcist, perfekt til en præsentation.
+      Formater teksten med simple markdown bullet points.
+      Maksimalt 5 bullet points.`;
 
       console.log(`Generating content for slide ${index + 1}:`, slide.title);
 
@@ -72,10 +70,10 @@ serve(async (req) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
+          model: 'gpt-4o-mini',
           messages: [
-            { role: 'system', content: 'You are a professional presentation expert.' },
-            { role: 'user', content: prompt }
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Generer indhold til præsentationsslide: ${slide.title}` }
           ],
           temperature: 0.7,
         }),

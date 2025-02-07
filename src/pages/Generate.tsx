@@ -13,6 +13,7 @@ import {
 import { ArrowLeft, Sparkles, RotateCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { Progress } from "@/components/ui/progress";
 
 interface OutlineItem {
   id: number;
@@ -24,6 +25,8 @@ const Generate = () => {
   const { toast } = useToast();
   const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationStep, setGenerationStep] = useState<string>("");
+  const [generationProgress, setGenerationProgress] = useState(0);
   const [outline, setOutline] = useState<OutlineItem[]>([]);
   const [slideCount, setSlideCount] = useState("8");
   const [language, setLanguage] = useState("da");
@@ -32,6 +35,9 @@ const Generate = () => {
     if (!prompt) return;
     
     setIsGenerating(true);
+    setGenerationStep("Genererer disposition...");
+    setGenerationProgress(25);
+    
     try {
       const { data, error } = await supabase.functions.invoke('generate-outline', {
         body: {
@@ -46,6 +52,7 @@ const Generate = () => {
       }
 
       setOutline(data.outline);
+      setGenerationProgress(50);
       
       toast({
         title: "Disposition genereret",
@@ -58,8 +65,8 @@ const Generate = () => {
         description: error.message || "Der opstod en fejl ved generering af disposition",
         variant: "destructive",
       });
-    } finally {
       setIsGenerating(false);
+      setGenerationProgress(0);
     }
   };
 
@@ -67,6 +74,9 @@ const Generate = () => {
     if (outline.length === 0) return;
 
     setIsGenerating(true);
+    setGenerationStep("Genererer præsentation...");
+    setGenerationProgress(75);
+
     try {
       const { data, error } = await supabase.functions.invoke('generate-slides', {
         body: {
@@ -79,6 +89,7 @@ const Generate = () => {
         throw error;
       }
 
+      setGenerationProgress(100);
       toast({
         title: "Præsentation genereret",
         description: "Din præsentation er klar!",
@@ -95,6 +106,7 @@ const Generate = () => {
       });
     } finally {
       setIsGenerating(false);
+      setGenerationProgress(0);
     }
   };
 
@@ -114,6 +126,14 @@ const Generate = () => {
 
         <div className="max-w-3xl mx-auto">
           <h1 className="text-3xl font-bold text-center mb-8">Generer</h1>
+
+          {isGenerating && (
+            <div className="mb-8 text-center">
+              <h2 className="text-xl font-semibold mb-4">{generationStep}</h2>
+              <Progress value={generationProgress} className="mb-2" />
+              <p className="text-sm text-gray-600">{generationProgress}% færdig</p>
+            </div>
+          )}
 
           <div className="flex items-center gap-4 mb-6">
             <div className="flex-1">

@@ -7,7 +7,15 @@ const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
+if (!openAIApiKey) {
+  throw new Error('OPENAI_API_KEY is required');
+}
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,6 +23,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -68,6 +77,7 @@ serve(async (req) => {
             { role: 'system', content: 'You are a professional presentation expert.' },
             { role: 'user', content: prompt }
           ],
+          temperature: 0.7,
         }),
       });
 

@@ -22,10 +22,16 @@ serve(async (req) => {
   try {
     const { outline, language } = await req.json();
 
+    if (!outline || !Array.isArray(outline)) {
+      throw new Error('Invalid outline format');
+    }
+
+    console.log('Received request with outline:', outline);
+
     // Create a new presentation record
     const { data: presentation, error: presentationError } = await supabase
       .from('presentations')
-      .insert([{ title: outline[0].title }])
+      .insert({ title: outline[0].title })
       .select()
       .single();
 
@@ -40,12 +46,12 @@ serve(async (req) => {
     const slides = [];
     for (const [index, slide] of outline.entries()) {
       const prompt = `
-        Du er ekspert i at lave præsentationsslides. 
-        Generer indhold til et slide med titlen "${slide.title}".
-        Sproget skal være på ${language === 'da' ? 'dansk' : 'engelsk'}.
-        Indholdet skal være kortfattet og præcist, perfekt til en præsentation.
-        Formater teksten med simple markdown bullet points.
-        Maksimalt 5 bullet points.
+        You are an expert in creating presentation slides. 
+        Generate content for a slide with the title "${slide.title}".
+        The language should be in ${language === 'da' ? 'Danish' : 'English'}.
+        The content should be concise and precise, perfect for a presentation.
+        Format the text with simple markdown bullet points.
+        Maximum 5 bullet points.
       `;
 
       console.log(`Generating content for slide ${index + 1}:`, slide.title);
@@ -57,9 +63,9 @@ serve(async (req) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4o-mini', // This is the correct model name
+          model: 'gpt-3.5-turbo',
           messages: [
-            { role: 'system', content: 'Du er en professionel præsentationsekspert.' },
+            { role: 'system', content: 'You are a professional presentation expert.' },
             { role: 'user', content: prompt }
           ],
         }),
@@ -76,9 +82,10 @@ serve(async (req) => {
 
       console.log(`Generated content for slide ${index + 1}:`, content);
 
+      // Insert the slide into database
       const { error: slideError } = await supabase
         .from('slides')
-        .insert([{
+        .insert({
           presentation_id: presentation.id,
           position: index,
           title: slide.title,
@@ -88,7 +95,7 @@ serve(async (req) => {
             contentColor: '#4a4a4a',
             fontSize: 'text-lg',
           }
-        }]);
+        });
 
       if (slideError) {
         console.error('Error creating slide:', slideError);

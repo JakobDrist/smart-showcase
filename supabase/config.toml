@@ -16,8 +16,8 @@ enabled = true
 enabled = true
 
 [functions]
-[functions.main]
 enabled = true
+
+[functions.main]
 verify_jwt = false
-path = "supabase/functions"
 

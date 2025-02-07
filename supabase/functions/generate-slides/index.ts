@@ -29,7 +29,12 @@ serve(async (req) => {
       .select()
       .single();
 
-    if (presentationError) throw presentationError;
+    if (presentationError) {
+      console.error('Error creating presentation:', presentationError);
+      throw presentationError;
+    }
+
+    console.log('Created presentation:', presentation);
 
     // Generate content for each slide
     const slides = [];
@@ -43,6 +48,8 @@ serve(async (req) => {
         Maksimalt 5 bullet points.
       `;
 
+      console.log(`Generating content for slide ${index + 1}:`, slide.title);
+
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -50,7 +57,7 @@ serve(async (req) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
+          model: 'gpt-4o-mini', // This is the correct model name
           messages: [
             { role: 'system', content: 'Du er en professionel præsentationsekspert.' },
             { role: 'user', content: prompt }
@@ -58,8 +65,16 @@ serve(async (req) => {
         }),
       });
 
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error('OpenAI API error:', errorData);
+        throw new Error(`OpenAI API error: ${response.status} ${errorData}`);
+      }
+
       const data = await response.json();
       const content = data.choices[0].message.content;
+
+      console.log(`Generated content for slide ${index + 1}:`, content);
 
       const { error: slideError } = await supabase
         .from('slides')
@@ -75,7 +90,10 @@ serve(async (req) => {
           }
         }]);
 
-      if (slideError) throw slideError;
+      if (slideError) {
+        console.error('Error creating slide:', slideError);
+        throw slideError;
+      }
       
       slides.push({
         title: slide.title,

@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { ChevronLeft, ChevronRight, Plus, Image, Palette, Layout, Grid, Type } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Image, Layout, Grid, Type, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Progress } from "@/components/ui/progress";
@@ -12,9 +12,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-const SUPABASE_URL = "https://qrodseazvxvrixnmzumf.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFyb2RzZWF6dnh2cml4bm16dW1mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg5NDk3OTEsImV4cCI6MjA1NDUyNTc5MX0.ysXE_sLoCiYLdt__AcWV6RgrnSAEP6PHKEp-MB3rhwA";
 
 const Editor = () => {
   const { toast } = useToast();
@@ -76,9 +73,8 @@ const Editor = () => {
         accent_color: '#4ade80',
         background_type: 'gradient',
         gradient: 'linear-gradient(90deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.7) 100%)',
-        number_style: 'square',
-        grid_layout: 'vertical',
-        bullet_style: 'none'
+        text_align: 'left',
+        spacing: 'normal'
       })
       .select()
       .single();
@@ -119,32 +115,6 @@ const Editor = () => {
     ));
   };
 
-  const generateImage = async (prompt) => {
-    try {
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-image`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ prompt }),
-      });
-
-      if (!response.ok) throw new Error('Failed to generate image');
-
-      const data = await response.json();
-      return data.image;
-    } catch (error) {
-      console.error('Error generating image:', error);
-      toast({
-        title: "Fejl",
-        description: "Der opstod en fejl ved generering af billede.",
-        variant: "destructive",
-      });
-      return null;
-    }
-  };
-
   const navigateSlides = (direction: "prev" | "next") => {
     if (direction === "prev" && currentSlide > 0) {
       setCurrentSlide(currentSlide - 1);
@@ -153,27 +123,29 @@ const Editor = () => {
     }
   };
 
-  const getBulletStyle = (style) => {
-    switch (style) {
-      case 'circle':
-        return 'list-disc';
-      case 'square':
-        return 'list-square';
-      case 'number':
-        return 'list-decimal';
+  const getTextAlignment = (align) => {
+    switch (align) {
+      case 'left':
+        return 'text-left';
+      case 'center':
+        return 'text-center';
+      case 'right':
+        return 'text-right';
       default:
-        return 'list-none';
+        return 'text-left';
     }
   };
 
-  const getGridLayout = (layout) => {
-    switch (layout) {
-      case 'horizontal':
-        return 'flex-row';
-      case 'grid':
-        return 'grid grid-cols-2 gap-8';
+  const getSpacing = (spacing) => {
+    switch (spacing) {
+      case 'compact':
+        return 'space-y-2';
+      case 'normal':
+        return 'space-y-4';
+      case 'relaxed':
+        return 'space-y-8';
       default:
-        return 'flex-col';
+        return 'space-y-4';
     }
   };
 
@@ -188,14 +160,8 @@ const Editor = () => {
     );
   }
 
-  const currentTheme = slides[currentSlide]?.theme || 'dark';
-  const currentAccentColor = slides[currentSlide]?.accent_color || '#4ade80';
-  const currentGradient = slides[currentSlide]?.gradient;
-  const currentLayout = slides[currentSlide]?.grid_layout || 'vertical';
-  const currentBulletStyle = slides[currentSlide]?.bullet_style || 'none';
-
   return (
-    <div className={`min-h-screen flex flex-col ${currentTheme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'}`}>
+    <div className="min-h-screen flex flex-col bg-gray-900 text-white">
       <div className="flex justify-between items-center p-4 bg-background/80 backdrop-blur-sm border-b">
         <Button
           variant="ghost"
@@ -214,39 +180,41 @@ const Editor = () => {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
-              <DropdownMenuItem onClick={() => updateSlide(slides[currentSlide].id, { grid_layout: 'vertical' })}>
-                Vertikalt layout
+              <DropdownMenuItem onClick={() => updateSlide(slides[currentSlide].id, { text_align: 'left' })}>
+                <AlignLeft className="mr-2 h-4 w-4" />
+                Venstrejusteret
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => updateSlide(slides[currentSlide].id, { grid_layout: 'horizontal' })}>
-                Horisontalt layout
+              <DropdownMenuItem onClick={() => updateSlide(slides[currentSlide].id, { text_align: 'center' })}>
+                <AlignCenter className="mr-2 h-4 w-4" />
+                Centreret
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => updateSlide(slides[currentSlide].id, { grid_layout: 'grid' })}>
-                Grid layout
+              <DropdownMenuItem onClick={() => updateSlide(slides[currentSlide].id, { text_align: 'right' })}>
+                <AlignRight className="mr-2 h-4 w-4" />
+                Højrejusteret
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
-                <Type className="mr-2 h-4 w-4" />
-                Punkter
+                <Grid className="mr-2 h-4 w-4" />
+                Mellemrum
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
-              <DropdownMenuItem onClick={() => updateSlide(slides[currentSlide].id, { bullet_style: 'none' })}>
-                Ingen punkter
+              <DropdownMenuItem onClick={() => updateSlide(slides[currentSlide].id, { spacing: 'compact' })}>
+                Kompakt
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => updateSlide(slides[currentSlide].id, { bullet_style: 'circle' })}>
-                Runde punkter
+              <DropdownMenuItem onClick={() => updateSlide(slides[currentSlide].id, { spacing: 'normal' })}>
+                Normal
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => updateSlide(slides[currentSlide].id, { bullet_style: 'square' })}>
-                Firkantede punkter
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => updateSlide(slides[currentSlide].id, { bullet_style: 'number' })}>
-                Nummererede punkter
+              <DropdownMenuItem onClick={() => updateSlide(slides[currentSlide].id, { spacing: 'relaxed' })}>
+                Afslappet
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
           <Button onClick={addSlide} variant="outline">
             <Plus className="mr-2 h-4 w-4" />
             Tilføj slide
@@ -267,7 +235,7 @@ const Editor = () => {
                     : "bg-accent hover:bg-accent/80"
                 }`}
                 style={{
-                  borderLeft: `4px solid ${slide.accent_color || currentAccentColor}`
+                  borderLeft: `4px solid ${slide.accent_color || '#4ade80'}`
                 }}
               >
                 <h4 className="font-medium truncate">Slide {index + 1}</h4>
@@ -281,16 +249,14 @@ const Editor = () => {
           {slides.length > 0 && (
             <>
               <div 
-                className={`max-w-4xl mx-auto rounded-xl shadow-2xl overflow-hidden transition-all duration-300 ${
-                  currentTheme === 'dark' ? 'bg-gray-800' : 'bg-white'
-                }`}
+                className={`max-w-4xl mx-auto rounded-xl shadow-2xl overflow-hidden transition-all duration-300`}
                 style={{
                   aspectRatio: '16/9',
                   background: slides[currentSlide].background_type === 'gradient' 
-                    ? currentGradient 
+                    ? slides[currentSlide].gradient 
                     : slides[currentSlide].background_image 
                       ? `url(${slides[currentSlide].background_image})` 
-                      : currentTheme === 'dark' ? '#1a1a1a' : '#ffffff',
+                      : '#1a1a1a',
                   backgroundSize: 'cover',
                   backgroundPosition: 'center',
                 }}
@@ -298,8 +264,10 @@ const Editor = () => {
                 <div className="h-full w-full backdrop-blur-sm bg-background/40 p-12">
                   <div
                     contentEditable
-                    className="text-6xl font-bold mb-8 focus:outline-none transition-all duration-300"
-                    style={{ color: currentAccentColor }}
+                    className={`text-6xl font-bold mb-8 focus:outline-none transition-all duration-300 ${
+                      getTextAlignment(slides[currentSlide].text_align)
+                    }`}
+                    style={{ color: slides[currentSlide].accent_color }}
                     suppressContentEditableWarning
                     onBlur={(e) => updateSlide(slides[currentSlide].id, { 
                       title: e.target.textContent 
@@ -309,7 +277,11 @@ const Editor = () => {
                   </div>
                   <div
                     contentEditable
-                    className={`text-xl leading-relaxed focus:outline-none space-y-4 ${getBulletStyle(currentBulletStyle)} ${getGridLayout(currentLayout)}`}
+                    className={`text-xl leading-relaxed focus:outline-none ${
+                      getTextAlignment(slides[currentSlide].text_align)
+                    } ${
+                      getSpacing(slides[currentSlide].spacing)
+                    }`}
                     suppressContentEditableWarning
                     onBlur={(e) => updateSlide(slides[currentSlide].id, { 
                       content: e.target.textContent 
@@ -328,9 +300,7 @@ const Editor = () => {
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <span className={`py-2 px-4 rounded-lg ${
-                  currentTheme === 'dark' ? 'bg-gray-800' : 'bg-white'
-                }`}>
+                <span className="py-2 px-4 rounded-lg bg-gray-800">
                   {currentSlide + 1} / {slides.length}
                 </span>
                 <Button

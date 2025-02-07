@@ -21,13 +21,11 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    await setupStorageBucket(supabase);
     const { outline, language } = await req.json();
 
     if (!outline || !Array.isArray(outline)) {
@@ -35,8 +33,8 @@ serve(async (req) => {
     }
 
     console.log('Received request with outline:', outline);
+    console.log('Language:', language);
 
-    // Set up streaming
     const encoder = new TextEncoder();
     const stream = new TransformStream();
     const writer = stream.writable.getWriter();
@@ -58,12 +56,17 @@ serve(async (req) => {
     // Process each slide
     for (const [index, slide] of outline.entries()) {
       try {
+        console.log(`Processing slide ${index + 1}/${outline.length}: ${slide.title}`);
+
         const imagePrompt = `Create a modern, minimalist presentation slide background image for topic: ${slide.title}. The image should be subtle and not interfere with text overlay.`;
         
         const imageUrl = await generateImage(openAIApiKey, imagePrompt);
+        console.log('Generated image URL for slide:', imageUrl);
+        
         const imageResponse = await fetch(imageUrl);
         const imageBlob = await imageResponse.blob();
         const publicUrl = await uploadAndGetImageUrl(supabase, imageBlob);
+        console.log('Uploaded image to storage:', publicUrl);
 
         const response = await generateContent(openAIApiKey, slide.title, language);
         let slideContent = '';
@@ -125,6 +128,8 @@ serve(async (req) => {
         await writer.write(encoder.encode(
           `data: ${JSON.stringify({ type: 'slide-complete', slide: index })}\n\n`
         ));
+
+        console.log(`Completed slide ${index + 1}/${outline.length}`);
 
       } catch (error) {
         console.error(`Error processing slide ${index}:`, error);

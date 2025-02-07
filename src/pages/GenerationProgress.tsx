@@ -1,6 +1,6 @@
 
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { GenerationProgress } from "@/components/generate/GenerationProgress";
@@ -23,7 +23,6 @@ const GenerationProgressPage = () => {
   } = usePresentation();
 
   useEffect(() => {
-    // Get outline and language from URL parameters
     const outlineParam = searchParams.get("outline");
     const languageParam = searchParams.get("language");
     
@@ -33,8 +32,10 @@ const GenerationProgressPage = () => {
         setOutline(parsedOutline);
         setLanguage(languageParam);
         
-        // Start generation automatically
-        handleGeneratePresentation();
+        // Start generation immediately
+        setTimeout(() => {
+          handleGeneratePresentation();
+        }, 100);
       } catch (error) {
         console.error("Error parsing outline:", error);
         toast({

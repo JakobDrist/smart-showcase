@@ -45,9 +45,7 @@ export const usePresentation = () => {
         },
       });
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       setOutline(data.outline);
       setGenerationProgress(50);
@@ -80,20 +78,16 @@ export const usePresentation = () => {
     setSlideContent(new Array(outline.length).fill(''));
 
     try {
-      const { data: stream, error } = await supabase.functions.invoke('generate-slides', {
-        body: { 
-          outline,
-          language 
-        },
+      const response = await supabase.functions.invoke('generate-slides', {
+        body: { outline, language },
         headers: { 'Accept': 'text/event-stream' },
       });
 
-      if (error) throw error;
-      if (!stream) throw new Error('No response data');
+      if (!response.data) {
+        throw new Error('Ingen data modtaget fra serveren');
+      }
 
-      console.log('Got response from generate-slides');
-
-      const reader = new ReadableStreamDefaultReader(stream as unknown as ReadableStream);
+      const reader = new ReadableStreamDefaultReader(response.data as ReadableStream);
       const decoder = new TextDecoder();
       let buffer = '';
 
@@ -120,16 +114,14 @@ export const usePresentation = () => {
                       newContent[update.slide] = (newContent[update.slide] || '') + update.content;
                       return newContent;
                     });
-                    setGenerationProgress(
-                      Math.min(100, ((update.slide + 1) / outline.length) * 100)
-                    );
+                    setGenerationProgress(((update.slide + 1) / outline.length) * 100);
                     setGenerationStep(`Genererer slide ${update.slide + 1} af ${outline.length}`);
                   }
                   break;
 
                 case 'slide-complete':
                   if (typeof update.slide === 'number') {
-                    setGenerationStep(`Genererer slide ${update.slide + 2} af ${outline.length}`);
+                    setGenerationStep(`Forbereder slide ${update.slide + 2} af ${outline.length}`);
                   }
                   break;
 
@@ -146,7 +138,7 @@ export const usePresentation = () => {
                   break;
 
                 case 'error':
-                  throw new Error(update.message || 'Unknown error');
+                  throw new Error(update.message || 'Der opstod en ukendt fejl');
               }
             } catch (e) {
               console.error('Error parsing stream update:', e);
@@ -162,6 +154,7 @@ export const usePresentation = () => {
         description: error.message || "Der opstod en fejl ved generering af præsentationen",
         variant: "destructive",
       });
+      setGenerationProgress(0);
     } finally {
       setIsGenerating(false);
     }

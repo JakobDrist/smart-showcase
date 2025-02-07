@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { ArrowLeft, Sparkles, RotateCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface OutlineItem {
   id: number;
@@ -32,23 +33,18 @@ const Generate = () => {
     
     setIsGenerating(true);
     try {
-      const response = await fetch('/functions/v1/generate-outline', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke('generate-outline', {
+        body: {
           prompt,
           slideCount: parseInt(slideCount),
           language,
-        }),
+        },
       });
 
-      if (!response.ok) {
-        throw new Error('Fejl ved generering af disposition');
+      if (error) {
+        throw error;
       }
 
-      const data = await response.json();
       setOutline(data.outline);
       
       toast({
@@ -56,6 +52,7 @@ const Generate = () => {
         description: "Du kan nu redigere dispositionen før den endelige generering.",
       });
     } catch (error) {
+      console.error('Error generating outline:', error);
       toast({
         title: "Fejl",
         description: error.message || "Der opstod en fejl ved generering af disposition",

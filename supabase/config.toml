@@ -16,8 +16,5 @@ enabled = true
 enabled = true
 
 [functions]
-[functions.config]
 enabled = true
-
-[functions.paths]
-value = ["supabase/functions"]
+paths = ["supabase/functions"]

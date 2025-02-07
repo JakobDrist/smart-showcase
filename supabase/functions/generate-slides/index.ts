@@ -98,19 +98,26 @@ serve(async (req) => {
         .from('presentation_images')
         .getPublicUrl(filePath);
 
-      // Generate enhanced content for the slide
-      const systemPrompt = `Du er en professionel præsentationsekspert.
-      Generer indhold til et slide med titlen "${slide.title}".
-      Sproget skal være på ${language === 'da' ? 'dansk' : 'engelsk'}.
-      Formater indholdet som et JSON objekt med følgende struktur:
+      // Generate enhanced content for the slide with a very strict system prompt
+      const systemPrompt = `You are a professional presentation expert.
+      Your task is to generate content for a slide titled "${slide.title}" in ${language === 'da' ? 'Danish' : 'English'}.
+      You MUST format your response as a valid JSON object with this exact structure:
       {
-        "points": ["punkt 1", "punkt 2", ...],
-        "diagram": null eller "pie", "bar", "line" hvis datavisualisering er relevant,
-        "data": hvis diagram ikke er null, inkluder relevant data for diagrammet,
-        "layout": "grid", "vertical", eller "horizontal" baseret på indholdet
+        "points": ["point 1", "point 2", "point 3"],
+        "diagram": null,
+        "data": null,
+        "layout": "vertical"
       }
-      Maksimalt 5 bullet points.
-      Sørg for at punkterne er korte og præcise.`;
+      
+      Rules:
+      - points array MUST contain between 1-5 bullet points
+      - diagram MUST be either null, "pie", "bar", or "line"
+      - data MUST be null if diagram is null
+      - layout MUST be either "grid", "vertical", or "horizontal"
+      - ALL points must be strings, no nested objects or arrays
+      - Do NOT include any markdown or special formatting in the points
+      
+      Return ONLY the JSON object, no other text.`;
 
       console.log(`Generating content for slide ${index + 1}:`, slide.title);
 
@@ -124,7 +131,7 @@ serve(async (req) => {
           model: 'gpt-4o-mini',
           messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'user', content: `Generer indhold til præsentationsslide: ${slide.title}` }
+            { role: 'user', content: `Generate content for presentation slide: ${slide.title}` }
           ],
           temperature: 0.7,
         }),
@@ -137,15 +144,23 @@ serve(async (req) => {
       }
 
       const data = await response.json();
-      console.log('OpenAI response:', data);
+      console.log('OpenAI raw response:', data.choices[0].message.content);
       
       let contentData;
       try {
-        contentData = JSON.parse(data.choices[0].message.content);
+        contentData = JSON.parse(data.choices[0].message.content.trim());
+        
+        // Validate the response structure
+        if (!Array.isArray(contentData.points) || 
+            !contentData.points.every(point => typeof point === 'string') ||
+            !['grid', 'vertical', 'horizontal'].includes(contentData.layout) ||
+            ![null, 'pie', 'bar', 'line'].includes(contentData.diagram)) {
+          throw new Error('Invalid response structure');
+        }
       } catch (error) {
-        console.error('Error parsing OpenAI response:', error);
+        console.error('Error parsing or validating OpenAI response:', error);
         console.error('Raw response content:', data.choices[0].message.content);
-        throw new Error('Failed to parse OpenAI response');
+        throw new Error('Failed to parse or validate OpenAI response');
       }
 
       // Format the content based on the AI response

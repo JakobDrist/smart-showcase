@@ -80,7 +80,7 @@ export const usePresentation = () => {
     setSlideContent(new Array(outline.length).fill(''));
 
     try {
-      const response = await supabase.functions.invoke('generate-slides', {
+      const { data: stream, error } = await supabase.functions.invoke('generate-slides', {
         body: { 
           outline,
           language 
@@ -88,28 +88,30 @@ export const usePresentation = () => {
         headers: { 'Accept': 'text/event-stream' },
       });
 
-      if (!response.data) throw new Error('No response data');
-      console.log('Got response from generate-slides:', response);
+      if (error) throw error;
+      if (!stream) throw new Error('No response data');
 
-      const reader = new ReadableStreamDefaultReader(response.data as unknown as ReadableStream);
+      console.log('Got response from generate-slides');
+
+      const reader = new ReadableStreamDefaultReader(stream as unknown as ReadableStream);
       const decoder = new TextDecoder();
       let buffer = '';
-      
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        
+
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
-        
+
         for (const line of lines) {
           if (line.trim() === '') continue;
           if (line.startsWith('data: ')) {
             try {
               const update: StreamUpdate = JSON.parse(line.slice(5));
               console.log('Received update:', update);
-              
+
               switch (update.type) {
                 case 'content':
                   if (typeof update.slide === 'number' && update.content) {
@@ -121,15 +123,16 @@ export const usePresentation = () => {
                     setGenerationProgress(
                       Math.min(100, ((update.slide + 1) / outline.length) * 100)
                     );
-                  }
-                  break;
-                
-                case 'slide-complete':
-                  if (typeof update.slide === 'number') {
                     setGenerationStep(`Genererer slide ${update.slide + 1} af ${outline.length}`);
                   }
                   break;
-                
+
+                case 'slide-complete':
+                  if (typeof update.slide === 'number') {
+                    setGenerationStep(`Genererer slide ${update.slide + 2} af ${outline.length}`);
+                  }
+                  break;
+
                 case 'complete':
                   if (update.presentationId) {
                     setGenerationProgress(100);
@@ -141,7 +144,7 @@ export const usePresentation = () => {
                     navigate(`/editor/${update.presentationId}`);
                   }
                   break;
-                
+
                 case 'error':
                   throw new Error(update.message || 'Unknown error');
               }

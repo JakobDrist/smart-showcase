@@ -1,170 +1,29 @@
 
-import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ArrowLeft, Sparkles, RotateCw } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import { Progress } from "@/components/ui/progress";
-
-interface OutlineItem {
-  id: number;
-  title: string;
-}
-
-interface StreamUpdate {
-  type: 'content' | 'slide-complete' | 'complete' | 'error';
-  slide?: number;
-  content?: string;
-  presentationId?: string;
-  message?: string;
-}
+import { ArrowLeft } from "lucide-react";
+import { GenerationProgress } from "@/components/generate/GenerationProgress";
+import { GenerationForm } from "@/components/generate/GenerationForm";
+import { usePresentation } from "@/hooks/usePresentation";
 
 const Generate = () => {
   const navigate = useNavigate();
-  const { toast } = useToast();
-  const [prompt, setPrompt] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generationStep, setGenerationStep] = useState<string>("");
-  const [generationProgress, setGenerationProgress] = useState(0);
-  const [outline, setOutline] = useState<OutlineItem[]>([]);
-  const [slideContent, setSlideContent] = useState<string[]>([]);
-  const [slideCount, setSlideCount] = useState("8");
-  const [language, setLanguage] = useState("da");
-
-  const handleGenerateOutline = async () => {
-    if (!prompt) return;
-    
-    setIsGenerating(true);
-    setGenerationStep("Genererer disposition...");
-    setGenerationProgress(25);
-    
-    try {
-      const { data, error } = await supabase.functions.invoke('generate-outline', {
-        body: {
-          prompt,
-          slideCount: parseInt(slideCount),
-          language,
-        },
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      setOutline(data.outline);
-      setGenerationProgress(50);
-      toast({
-        title: "Disposition genereret",
-        description: "Du kan nu redigere dispositionen før den endelige generering.",
-      });
-    } catch (error) {
-      console.error('Error generating outline:', error);
-      toast({
-        title: "Fejl",
-        description: error.message || "Der opstod en fejl ved generering af disposition",
-        variant: "destructive",
-      });
-      setGenerationProgress(0);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const handleGeneratePresentation = async () => {
-    if (outline.length === 0) return;
-
-    setIsGenerating(true);
-    setGenerationStep("Genererer præsentation...");
-    setGenerationProgress(0);
-    setSlideContent(new Array(outline.length).fill(''));
-
-    try {
-      const response = await supabase.functions.invoke('generate-slides', {
-        body: { outline, language },
-        headers: { 'Accept': 'text/event-stream' },
-      });
-
-      if (!response.data) throw new Error('No response data');
-
-      const reader = new ReadableStreamDefaultReader(response.data as unknown as ReadableStream);
-      const decoder = new TextDecoder();
-      let buffer = '';
-      
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        
-        for (const line of lines) {
-          if (line.trim() === '') continue;
-          if (line.startsWith('data: ')) {
-            try {
-              const update: StreamUpdate = JSON.parse(line.slice(5));
-              
-              switch (update.type) {
-                case 'content':
-                  if (typeof update.slide === 'number' && update.content) {
-                    setSlideContent(prev => {
-                      const newContent = [...prev];
-                      newContent[update.slide!] = (newContent[update.slide!] || '') + update.content;
-                      return newContent;
-                    });
-                    setGenerationProgress(
-                      Math.min(100, ((update.slide! + 1) / outline.length) * 100)
-                    );
-                  }
-                  break;
-                
-                case 'slide-complete':
-                  if (typeof update.slide === 'number') {
-                    setGenerationStep(`Slide ${update.slide + 1}/${outline.length} færdig`);
-                  }
-                  break;
-                
-                case 'complete':
-                  if (update.presentationId) {
-                    setGenerationProgress(100);
-                    setGenerationStep("Præsentation færdig!");
-                    toast({
-                      title: "Præsentation genereret",
-                      description: "Din præsentation er klar!",
-                    });
-                    navigate(`/editor/${update.presentationId}`);
-                  }
-                  break;
-                
-                case 'error':
-                  throw new Error(update.message || 'Unknown error');
-              }
-            } catch (e) {
-              console.error('Error parsing stream update:', e);
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error generating presentation:', error);
-      toast({
-        title: "Fejl",
-        description: error.message || "Der opstod en fejl ved generering af præsentationen",
-        variant: "destructive",
-      });
-    } finally {
-      setIsGenerating(false);
-    }
-  };
+  const {
+    prompt,
+    setPrompt,
+    isGenerating,
+    generationStep,
+    generationProgress,
+    outline,
+    setOutline,
+    slideContent,
+    slideCount,
+    setSlideCount,
+    language,
+    setLanguage,
+    handleGenerateOutline,
+    handleGeneratePresentation,
+  } = usePresentation();
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#FFE5EC] to-[#FFE5EC]/50">
@@ -184,116 +43,25 @@ const Generate = () => {
           <h1 className="text-3xl font-bold text-center mb-8">Generer præsentation</h1>
 
           {isGenerating && (
-            <div className="mb-8 text-center">
-              <h2 className="text-xl font-semibold mb-4">{generationStep}</h2>
-              <Progress value={generationProgress} className="mb-2" />
-              <p className="text-sm text-gray-600">{Math.round(generationProgress)}% færdig</p>
-              
-              {slideContent.map((content, index) => (
-                content && (
-                  <div key={index} className="mt-4 p-4 bg-white/50 rounded-lg">
-                    <h3 className="font-semibold mb-2">Slide {index + 1}</h3>
-                    <p className="text-sm text-gray-700">{content}</p>
-                  </div>
-                )
-              ))}
-            </div>
+            <GenerationProgress
+              step={generationStep}
+              progress={generationProgress}
+              slideContent={slideContent}
+            />
           )}
 
-          <div className="flex items-center gap-4 mb-6">
-            <div className="flex-1">
-              <label className="block text-sm font-medium mb-2">Prompt</label>
-              <div className="relative">
-                <Input
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  placeholder="En præsentation om..."
-                  className="w-full pl-4 pr-10 py-2 rounded-lg"
-                  disabled={isGenerating}
-                />
-                <RotateCw
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 cursor-pointer"
-                  onClick={() => !isGenerating && setPrompt("")}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Antal slides</label>
-              <Select 
-                value={slideCount} 
-                onValueChange={setSlideCount}
-                disabled={isGenerating}
-              >
-                <SelectTrigger className="w-[120px]">
-                  <SelectValue placeholder="Vælg antal" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="4">4 slides</SelectItem>
-                  <SelectItem value="6">6 slides</SelectItem>
-                  <SelectItem value="8">8 slides</SelectItem>
-                  <SelectItem value="10">10 slides</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Sprog</label>
-              <Select 
-                value={language} 
-                onValueChange={setLanguage}
-                disabled={isGenerating}
-              >
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Vælg sprog" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="da">Dansk</SelectItem>
-                  <SelectItem value="en">English</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {outline.length > 0 && (
-            <div className="mb-8">
-              <h2 className="text-xl font-semibold mb-4">Disposition</h2>
-              <div className="space-y-2 bg-white rounded-lg p-4">
-                {outline.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center gap-4 p-3 rounded-lg hover:bg-gray-50"
-                  >
-                    <span className="text-sm text-gray-500">{item.id}</span>
-                    <input
-                      type="text"
-                      value={item.title}
-                      onChange={(e) => {
-                        const newOutline = outline.map((o) =>
-                          o.id === item.id ? { ...o, title: e.target.value } : o
-                        );
-                        setOutline(newOutline);
-                      }}
-                      className="flex-1 bg-transparent border-none focus:outline-none focus:ring-0"
-                      disabled={isGenerating}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="flex justify-center">
-            <Button
-              size="lg"
-              onClick={outline.length > 0 ? handleGeneratePresentation : handleGenerateOutline}
-              disabled={!prompt || isGenerating}
-              className="bg-primary hover:bg-primary/90 text-white font-medium px-8 py-6 rounded-full transition-all duration-300"
-            >
-              <Sparkles className="mr-2 h-5 w-5" />
-              {isGenerating ? "Genererer..." : outline.length > 0 ? "Generer præsentation" : "Generer disposition"}
-            </Button>
-          </div>
+          <GenerationForm
+            prompt={prompt}
+            setPrompt={setPrompt}
+            slideCount={slideCount}
+            setSlideCount={setSlideCount}
+            language={language}
+            setLanguage={setLanguage}
+            outline={outline}
+            setOutline={setOutline}
+            isGenerating={isGenerating}
+            onGenerate={outline.length > 0 ? handleGeneratePresentation : handleGenerateOutline}
+          />
         </div>
       </div>
     </div>

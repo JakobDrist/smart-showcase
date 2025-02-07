@@ -46,7 +46,9 @@ export type Database = {
           number_style: string | null
           position: number
           presentation_id: string | null
+          spacing: string | null
           style: Json | null
+          text_align: string | null
           theme: string | null
           title: string
         }
@@ -65,7 +67,9 @@ export type Database = {
           number_style?: string | null
           position: number
           presentation_id?: string | null
+          spacing?: string | null
           style?: Json | null
+          text_align?: string | null
           theme?: string | null
           title: string
         }
@@ -84,7 +88,9 @@ export type Database = {
           number_style?: string | null
           position?: number
           presentation_id?: string | null
+          spacing?: string | null
           style?: Json | null
+          text_align?: string | null
           theme?: string | null
           title?: string
         }

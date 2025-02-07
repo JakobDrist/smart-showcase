@@ -43,6 +43,7 @@ export type Database = {
           icon_style: string | null
           id: string
           layout: string | null
+          layout_type: string | null
           number_style: string | null
           position: number
           presentation_id: string | null
@@ -64,6 +65,7 @@ export type Database = {
           icon_style?: string | null
           id?: string
           layout?: string | null
+          layout_type?: string | null
           number_style?: string | null
           position: number
           presentation_id?: string | null
@@ -85,6 +87,7 @@ export type Database = {
           icon_style?: string | null
           id?: string
           layout?: string | null
+          layout_type?: string | null
           number_style?: string | null
           position?: number
           presentation_id?: string | null

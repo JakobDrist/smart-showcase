@@ -1,7 +1,21 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { ChevronLeft, ChevronRight, Plus, Image, Layout, Grid, Type, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
+import { 
+  ChevronLeft, 
+  ChevronRight, 
+  Plus, 
+  Layout, 
+  Grid, 
+  AlignLeft, 
+  AlignCenter, 
+  AlignRight,
+  LayoutGrid,
+  LayoutList,
+  Timer,
+  Box
+} from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Progress } from "@/components/ui/progress";
@@ -69,6 +83,7 @@ const Editor = () => {
         content: "Klik for at redigere",
         theme: 'dark',
         layout: 'default',
+        layout_type: 'default',
         accent_color: '#4ade80',
         background_type: 'gradient',
         gradient: 'linear-gradient(90deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.7) 100%)',
@@ -148,6 +163,58 @@ const Editor = () => {
     }
   };
 
+  const renderContent = (content, layoutType) => {
+    const contentLines = content.split('\n').filter(line => line.trim());
+    
+    switch (layoutType) {
+      case 'boxes':
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {contentLines.map((line, index) => (
+              <div key={index} className="p-4 rounded-lg bg-black/20 backdrop-blur-sm">
+                {line}
+              </div>
+            ))}
+          </div>
+        );
+      
+      case 'timeline':
+        return (
+          <div className="space-y-4">
+            {contentLines.map((line, index) => (
+              <div key={index} className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+                  {index + 1}
+                </div>
+                <div className="flex-1 pt-2">{line}</div>
+              </div>
+            ))}
+          </div>
+        );
+      
+      case 'grid':
+        return (
+          <div className="grid grid-cols-2 gap-6">
+            {contentLines.map((line, index) => (
+              <div key={index} className="flex items-start gap-2">
+                <span className="text-primary">•</span>
+                <span>{line}</span>
+              </div>
+            ))}
+          </div>
+        );
+      
+      default:
+        return (
+          <div className={getSpacing(slides[currentSlide]?.spacing)}>
+            {contentLines.map((line, index) => (
+              <p key={index}>{line}</p>
+            ))}
+          </div>
+        );
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-muted flex flex-col items-center justify-center p-4">
@@ -190,6 +257,33 @@ const Editor = () => {
               <DropdownMenuItem onClick={() => updateSlide(slides[currentSlide].id, { text_align: 'right' })}>
                 <AlignRight className="mr-2 h-4 w-4" />
                 Højrejusteret
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <LayoutGrid className="mr-2 h-4 w-4" />
+                Visning
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => updateSlide(slides[currentSlide].id, { layout_type: 'default' })}>
+                <LayoutList className="mr-2 h-4 w-4" />
+                Standard
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => updateSlide(slides[currentSlide].id, { layout_type: 'boxes' })}>
+                <Box className="mr-2 h-4 w-4" />
+                Bokse
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => updateSlide(slides[currentSlide].id, { layout_type: 'timeline' })}>
+                <Timer className="mr-2 h-4 w-4" />
+                Tidslinje
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => updateSlide(slides[currentSlide].id, { layout_type: 'grid' })}>
+                <Grid className="mr-2 h-4 w-4" />
+                Grid
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -278,15 +372,13 @@ const Editor = () => {
                     contentEditable
                     className={`text-xl leading-relaxed focus:outline-none ${
                       getTextAlignment(slides[currentSlide].text_align)
-                    } ${
-                      getSpacing(slides[currentSlide].spacing)
                     }`}
                     suppressContentEditableWarning
                     onBlur={(e) => updateSlide(slides[currentSlide].id, { 
                       content: e.target.textContent 
                     })}
                   >
-                    {slides[currentSlide].content}
+                    {renderContent(slides[currentSlide].content, slides[currentSlide].layout_type)}
                   </div>
                 </div>
               </div>
@@ -316,6 +408,3 @@ const Editor = () => {
       </div>
     </div>
   );
-};
-
-export default Editor;

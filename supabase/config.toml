@@ -1,2 +1,22 @@
 
 project_id = "qrodseazvxvrixnmzumf"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+
+[db]
+port = 54322
+
+[realtime]
+enabled = true
+
+[storage]
+enabled = true
+
+[functions]
+enabled = true
+
+[[functions.paths]]
+path = "supabase/functions"

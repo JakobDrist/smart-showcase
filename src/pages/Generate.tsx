@@ -28,7 +28,7 @@ const Generate = () => {
   const [slideCount, setSlideCount] = useState("8");
   const [language, setLanguage] = useState("da");
 
-  const handleGenerate = async () => {
+  const handleGenerateOutline = async () => {
     if (!prompt) return;
     
     setIsGenerating(true);
@@ -56,6 +56,41 @@ const Generate = () => {
       toast({
         title: "Fejl",
         description: error.message || "Der opstod en fejl ved generering af disposition",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleGeneratePresentation = async () => {
+    if (outline.length === 0) return;
+
+    setIsGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-slides', {
+        body: {
+          outline,
+          language,
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Præsentation genereret",
+        description: "Din præsentation er klar!",
+      });
+
+      // Navigate to editor with the new presentation
+      navigate(`/editor/${data.presentationId}`);
+    } catch (error) {
+      console.error('Error generating presentation:', error);
+      toast({
+        title: "Fejl",
+        description: error.message || "Der opstod en fejl ved generering af præsentationen",
         variant: "destructive",
       });
     } finally {
@@ -162,7 +197,7 @@ const Generate = () => {
           <div className="flex justify-center">
             <Button
               size="lg"
-              onClick={handleGenerate}
+              onClick={outline.length > 0 ? handleGeneratePresentation : handleGenerateOutline}
               disabled={!prompt || isGenerating}
               className="bg-primary hover:bg-primary/90 text-white font-medium px-8 py-6 rounded-full transition-all duration-300"
             >

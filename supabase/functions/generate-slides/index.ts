@@ -1,0 +1,100 @@
+
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+
+const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+const supabaseUrl = Deno.env.get('SUPABASE_URL');
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { outline, language } = await req.json();
+
+    // Create a new presentation record
+    const { data: presentation, error: presentationError } = await supabase
+      .from('presentations')
+      .insert([{ title: outline[0].title }])
+      .select()
+      .single();
+
+    if (presentationError) throw presentationError;
+
+    // Generate content for each slide
+    const slides = [];
+    for (const [index, slide] of outline.entries()) {
+      const prompt = `
+        Du er ekspert i at lave præsentationsslides. 
+        Generer indhold til et slide med titlen "${slide.title}".
+        Sproget skal være på ${language === 'da' ? 'dansk' : 'engelsk'}.
+        Indholdet skal være kortfattet og præcist, perfekt til en præsentation.
+        Formater teksten med simple markdown bullet points.
+        Maksimalt 5 bullet points.
+      `;
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openAIApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: 'Du er en professionel præsentationsekspert.' },
+            { role: 'user', content: prompt }
+          ],
+        }),
+      });
+
+      const data = await response.json();
+      const content = data.choices[0].message.content;
+
+      const { error: slideError } = await supabase
+        .from('slides')
+        .insert([{
+          presentation_id: presentation.id,
+          position: index,
+          title: slide.title,
+          content: content,
+          style: {
+            titleColor: '#1a1a1a',
+            contentColor: '#4a4a4a',
+            fontSize: 'text-lg',
+          }
+        }]);
+
+      if (slideError) throw slideError;
+      
+      slides.push({
+        title: slide.title,
+        content: content,
+      });
+    }
+
+    return new Response(
+      JSON.stringify({ presentationId: presentation.id, slides }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Error in generate-slides function:', error);
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
+  }
+});

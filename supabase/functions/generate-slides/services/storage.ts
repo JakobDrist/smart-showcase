@@ -1,5 +1,5 @@
 
-import { SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
 export async function setupStorageBucket(supabase: SupabaseClient) {
   try {
@@ -46,4 +46,3 @@ export async function uploadAndGetImageUrl(supabase: SupabaseClient, imageBlob: 
 
   return publicUrl;
 }
-

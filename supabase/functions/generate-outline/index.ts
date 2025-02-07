@@ -10,12 +10,23 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    if (!openAIApiKey) {
+      throw new Error('OpenAI API key is not configured');
+    }
+
     const { prompt, slideCount, language } = await req.json();
+
+    if (!prompt || !slideCount || !language) {
+      throw new Error('Missing required parameters');
+    }
+
+    console.log('Generating outline with parameters:', { slideCount, language });
 
     const systemPrompt = `Du er en professionel præsentationsekspert. 
     Generer en disposition med ${slideCount} punkter til en præsentation på ${language === 'da' ? 'dansk' : 'engelsk'}.
@@ -30,7 +41,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4',
+        model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: prompt }
@@ -41,11 +52,14 @@ serve(async (req) => {
 
     if (!response.ok) {
       const error = await response.json();
+      console.error('OpenAI API error:', error);
       throw new Error(error.error?.message || 'Error calling OpenAI API');
     }
 
     const data = await response.json();
     const outlineText = data.choices[0].message.content;
+    
+    console.log('Received outline from OpenAI:', outlineText);
     
     // Parse the JSON string to ensure it's valid
     let outline;
@@ -55,6 +69,7 @@ serve(async (req) => {
         throw new Error('Response is not an array');
       }
     } catch (e) {
+      console.error('Error parsing outline:', e);
       // If parsing fails, try to extract array from the text
       const match = outlineText.match(/\[[\s\S]*\]/);
       if (match) {
@@ -63,6 +78,8 @@ serve(async (req) => {
         throw new Error('Could not parse AI response');
       }
     }
+
+    console.log('Successfully generated outline:', outline);
 
     return new Response(JSON.stringify({ outline }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

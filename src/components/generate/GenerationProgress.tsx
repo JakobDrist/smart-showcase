@@ -1,6 +1,7 @@
 
 import { Progress } from "@/components/ui/progress";
 import { Loader2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface GenerationProgressProps {
   step: string;
@@ -19,24 +20,41 @@ export const GenerationProgress = ({ step, progress, slideContent }: GenerationP
       <p className="text-sm text-gray-600">{Math.round(progress)}% færdig</p>
       
       <div className="mt-6 space-y-4">
-        {slideContent.map((content, index) => (
-          <div 
-            key={index} 
-            className={`transition-all duration-300 ${content ? 'opacity-100' : 'opacity-0'}`}
-          >
-            {content && (
-              <div className="p-4 bg-white/50 backdrop-blur-sm rounded-lg shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-semibold text-gray-800">Slide {index + 1}</h3>
-                  <span className="text-xs text-gray-500">
-                    {content ? 'Genereret' : 'Venter...'}
-                  </span>
+        <AnimatePresence>
+          {slideContent.map((content, index) => (
+            <motion.div 
+              key={index}
+              initial={{ opacity: 0, y: 20 }}
+              animate={content ? { opacity: 1, y: 0 } : {}}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              className="relative"
+            >
+              {content ? (
+                <div className="p-4 bg-white/50 backdrop-blur-sm rounded-lg shadow-sm border border-gray-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-semibold text-gray-800">Slide {index + 1}</h3>
+                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                      Genereret
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{content}</p>
                 </div>
-                <p className="text-sm text-gray-700 whitespace-pre-wrap">{content}</p>
-              </div>
-            )}
-          </div>
-        ))}
+              ) : (
+                <div className="p-4 bg-gray-50/50 backdrop-blur-sm rounded-lg shadow-sm border border-gray-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-semibold text-gray-400">Slide {index + 1}</h3>
+                    <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-full flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Venter...
+                    </span>
+                  </div>
+                  <div className="h-8 bg-gray-100/50 rounded animate-pulse" />
+                </div>
+              )}
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
     </div>
   );

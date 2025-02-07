@@ -53,6 +53,7 @@ const Generate = () => {
 
       setOutline(data.outline);
       setGenerationProgress(50);
+      setIsGenerating(false); // Reset generating state after success
       
       toast({
         title: "Disposition genereret",
@@ -90,6 +91,8 @@ const Generate = () => {
       }
 
       setGenerationProgress(100);
+      setIsGenerating(false); // Reset generating state after success
+      
       toast({
         title: "Præsentation genereret",
         description: "Din præsentation er klar!",
@@ -104,7 +107,6 @@ const Generate = () => {
         description: error.message || "Der opstod en fejl ved generering af præsentationen",
         variant: "destructive",
       });
-    } finally {
       setIsGenerating(false);
       setGenerationProgress(0);
     }
@@ -144,10 +146,11 @@ const Generate = () => {
                   onChange={(e) => setPrompt(e.target.value)}
                   placeholder="En præsentation om..."
                   className="w-full pl-4 pr-10 py-2 rounded-lg"
+                  disabled={isGenerating}
                 />
                 <RotateCw
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 cursor-pointer"
-                  onClick={() => setPrompt("")}
+                  onClick={() => !isGenerating && setPrompt("")}
                 />
               </div>
             </div>
@@ -157,6 +160,7 @@ const Generate = () => {
               <Select 
                 value={slideCount} 
                 onValueChange={setSlideCount}
+                disabled={isGenerating}
               >
                 <SelectTrigger className="w-[120px]">
                   <SelectValue placeholder="Vælg antal" />
@@ -175,6 +179,7 @@ const Generate = () => {
               <Select 
                 value={language} 
                 onValueChange={setLanguage}
+                disabled={isGenerating}
               >
                 <SelectTrigger className="w-[140px]">
                   <SelectValue placeholder="Vælg sprog" />
@@ -207,6 +212,7 @@ const Generate = () => {
                         setOutline(newOutline);
                       }}
                       className="flex-1 bg-transparent border-none focus:outline-none focus:ring-0"
+                      disabled={isGenerating}
                     />
                   </div>
                 ))}

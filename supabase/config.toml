@@ -18,6 +18,9 @@ enabled = true
 [functions]
 enabled = true
 
-[functions.main]
+[functions.generate-slides]
+verify_jwt = false
+
+[functions.generate-outline]
 verify_jwt = false
 

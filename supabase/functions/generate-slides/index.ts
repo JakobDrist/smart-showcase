@@ -1,6 +1,10 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { corsHeaders } from "./utils/stream.ts";
+import { setupStorageBucket, uploadAndGetImageUrl } from "./services/storage.ts";
+import { generateImage, generateContent } from "./services/openai.ts";
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -16,39 +20,6 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-async function* streamOpenAIResponse(response: Response) {
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('No response body');
-
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    for (const line of lines) {
-      if (line.trim() === '') continue;
-      if (line.trim() === 'data: [DONE]') return;
-      if (line.startsWith('data: ')) {
-        const data = JSON.parse(line.slice(5));
-        if (data.choices[0].delta.content) {
-          yield data.choices[0].delta.content;
-        }
-      }
-    }
-  }
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -59,32 +30,7 @@ serve(async (req) => {
   const writer = responseStream.writable.getWriter();
 
   try {
-    // Først opretter vi storage bucket hvis det ikke eksisterer
-    try {
-      const { data: buckets } = await supabase
-        .storage
-        .listBuckets();
-      
-      const bucketExists = buckets?.some(bucket => bucket.name === 'presentation_images');
-      
-      if (!bucketExists) {
-        const { error: createBucketError } = await supabase
-          .storage
-          .createBucket('presentation_images', {
-            public: true,
-            allowedMimeTypes: ['image/png', 'image/jpeg'],
-            fileSizeLimit: 5242880, // 5MB
-          });
-
-        if (createBucketError) {
-          throw createBucketError;
-        }
-      }
-    } catch (bucketError) {
-      console.error('Error managing storage bucket:', bucketError);
-      throw new Error('Failed to setup storage bucket');
-    }
-
+    await setupStorageBucket(supabase);
     const { outline, language } = await req.json();
 
     if (!outline || !Array.isArray(outline)) {
@@ -109,78 +55,12 @@ serve(async (req) => {
     for (const [index, slide] of outline.entries()) {
       const imagePrompt = `Create a modern, minimalist presentation slide background image for topic: ${slide.title}. The image should be subtle and not interfere with text overlay.`;
       
-      const imageResponse = await fetch('https://api.openai.com/v1/images/generations', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openAIApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: "dall-e-3",
-          prompt: imagePrompt,
-          n: 1,
-          size: "1024x1024",
-        }),
-      });
+      const imageUrl = await generateImage(openAIApiKey, imagePrompt);
+      const imageResponse = await fetch(imageUrl);
+      const imageBlob = await imageResponse.blob();
+      const publicUrl = await uploadAndGetImageUrl(supabase, imageBlob);
 
-      if (!imageResponse.ok) {
-        const error = await imageResponse.text();
-        console.error('OpenAI Image API error:', error);
-        throw new Error(`OpenAI Image API error: ${error}`);
-      }
-
-      const imageData = await imageResponse.json();
-      const imageUrl = imageData.data[0].url;
-
-      const imageDownloadResponse = await fetch(imageUrl);
-      const imageBlob = await imageDownloadResponse.blob();
-      
-      const filePath = `${crypto.randomUUID()}.png`;
-      const { error: uploadError } = await supabase.storage
-        .from('presentation_images')
-        .upload(filePath, imageBlob, {
-          contentType: 'image/png',
-          upsert: false
-        });
-
-      if (uploadError) {
-        console.error('Storage upload error:', uploadError);
-        throw uploadError;
-      }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('presentation_images')
-        .getPublicUrl(filePath);
-
-      // Start content generation with streaming
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openAIApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-4',
-          messages: [
-            { 
-              role: 'system', 
-              content: `You are a professional presentation expert. Generate content for slide titled "${slide.title}" in ${language === 'da' ? 'Danish' : 'English'}. Focus on creating clear, concise points.`
-            },
-            { 
-              role: 'user', 
-              content: `Generate content for presentation slide: ${slide.title}`
-            }
-          ],
-          stream: true,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        console.error('OpenAI API error:', error);
-        throw new Error(`OpenAI API error: ${error}`);
-      }
-
+      const response = await generateContent(openAIApiKey, slide.title, language);
       let slideContent = '';
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -271,3 +151,4 @@ serve(async (req) => {
     });
   }
 });
+

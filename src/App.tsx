@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Generate from "./pages/Generate";
+import GenerationProgress from "./pages/GenerationProgress";
 import Editor from "./pages/Editor";
 import NotFound from "./pages/NotFound";
 
@@ -20,6 +21,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/generate" element={<Generate />} />
+          <Route path="/generation-progress" element={<GenerationProgress />} />
           <Route path="/editor/:presentationId" element={<Editor />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -408,3 +408,6 @@ const Editor = () => {
       </div>
     </div>
   );
+};
+
+export default Editor;

@@ -71,6 +71,9 @@ export const usePresentation = () => {
   const handleGeneratePresentation = async () => {
     if (outline.length === 0) return;
 
+    console.log('Starting presentation generation with outline:', outline);
+    console.log('Language:', language);
+
     setIsGenerating(true);
     setGenerationStep("Forbereder præsentation...");
     setGenerationProgress(0);
@@ -78,11 +81,15 @@ export const usePresentation = () => {
 
     try {
       const response = await supabase.functions.invoke('generate-slides', {
-        body: { outline, language },
+        body: { 
+          outline,
+          language 
+        },
         headers: { 'Accept': 'text/event-stream' },
       });
 
       if (!response.data) throw new Error('No response data');
+      console.log('Got response from generate-slides:', response);
 
       const reader = new ReadableStreamDefaultReader(response.data as unknown as ReadableStream);
       const decoder = new TextDecoder();
@@ -101,6 +108,7 @@ export const usePresentation = () => {
           if (line.startsWith('data: ')) {
             try {
               const update: StreamUpdate = JSON.parse(line.slice(5));
+              console.log('Received update:', update);
               
               switch (update.type) {
                 case 'content':
@@ -139,6 +147,7 @@ export const usePresentation = () => {
               }
             } catch (e) {
               console.error('Error parsing stream update:', e);
+              throw e;
             }
           }
         }

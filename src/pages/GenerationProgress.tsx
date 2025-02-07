@@ -5,34 +5,43 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { GenerationProgress } from "@/components/generate/GenerationProgress";
 import { usePresentation } from "@/hooks/usePresentation";
+import { useToast } from "@/hooks/use-toast";
 
 const GenerationProgressPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { toast } = useToast();
   const {
     outline,
     setOutline,
+    language,
+    setLanguage,
     generationStep,
     generationProgress,
     slideContent,
-    language,
     handleGeneratePresentation,
   } = usePresentation();
 
   useEffect(() => {
-    // Get outline from URL parameters
+    // Get outline and language from URL parameters
     const outlineParam = searchParams.get("outline");
     const languageParam = searchParams.get("language");
     
-    if (outlineParam) {
+    if (outlineParam && languageParam) {
       try {
         const parsedOutline = JSON.parse(outlineParam);
         setOutline(parsedOutline);
+        setLanguage(languageParam);
         
         // Start generation automatically
         handleGeneratePresentation();
       } catch (error) {
         console.error("Error parsing outline:", error);
+        toast({
+          title: "Fejl",
+          description: "Der opstod en fejl ved indlæsning af dispositionen",
+          variant: "destructive",
+        });
         navigate("/generate");
       }
     } else {

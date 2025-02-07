@@ -13,6 +13,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+const SUPABASE_URL = "https://qrodseazvxvrixnmzumf.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFyb2RzZWF6dnh2cml4bm16dW1mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg5NDk3OTEsImV4cCI6MjA1NDUyNTc5MX0.ysXE_sLoCiYLdt__AcWV6RgrnSAEP6PHKEp-MB3rhwA";
+
 const Editor = () => {
   const { toast } = useToast();
   const { presentationId } = useParams();
@@ -113,10 +116,10 @@ const Editor = () => {
 
   const generateImage = async (prompt) => {
     try {
-      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/generate-image`, {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-image`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${supabase.supabaseKey}`,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ prompt }),

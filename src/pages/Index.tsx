@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Wand2 } from "lucide-react";
+import { FileText, Wand2, Upload } from "lucide-react";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -13,14 +13,7 @@ const Index = () => {
   const handleCreatePresentation = async () => {
     setIsLoading(true);
     try {
-      // In the future, this will integrate with OpenAI
-      toast({
-        title: "Velkommen!",
-        description: "Vi arbejder på at integrere AI-funktionalitet.",
-      });
-      // For now, we'll just simulate a delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      navigate("/editor");
+      navigate("/generate");
     } catch (error) {
       toast({
         title: "Fejl",
@@ -33,7 +26,7 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-muted to-background">
+    <div className="min-h-screen bg-gradient-to-b from-[#FFE5EC] to-[#FFE5EC]/50">
       <div className="container mx-auto px-4 py-16 animate-fade-in">
         <div className="max-w-3xl mx-auto text-center space-y-8">
           <span className="px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium inline-block">
@@ -41,45 +34,61 @@ const Index = () => {
           </span>
           
           <h1 className="text-5xl font-bold text-foreground mt-8 mb-4">
-            Skab fantastiske præsentationer med AI
+            Skab med AI
           </h1>
           
-          <p className="text-xl text-muted-foreground mb-8">
-            Lad vores AI hjælpe dig med at skabe professionelle præsentationer på få minutter.
-            Design, indhold og billeder genereres automatisk baseret på dine ønsker.
+          <p className="text-xl text-muted-foreground mb-4">
+            Hvordan vil du komme i gang?
           </p>
 
-          <div className="flex justify-center gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl mx-auto">
             <Button
+              variant="outline"
               size="lg"
               onClick={handleCreatePresentation}
-              disabled={isLoading}
-              className="bg-primary hover:bg-primary/90 text-white font-medium px-8 py-6 rounded-full transition-all duration-300 transform hover:scale-105"
+              className="h-auto p-6 flex flex-col items-center gap-4 hover:bg-white/80"
             >
-              <Wand2 className="mr-2 h-5 w-5" />
-              Start ny præsentation
+              <FileText className="h-8 w-8" />
+              <div>
+                <div className="font-semibold">Indsæt tekst</div>
+                <div className="text-sm text-muted-foreground">
+                  Opret fra noter eller eksisterende indhold
+                </div>
+              </div>
             </Button>
-          </div>
 
-          <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="p-6 rounded-2xl bg-white/50 backdrop-blur-sm border border-accent">
-              <h3 className="text-lg font-semibold mb-2">AI-Genereret Indhold</h3>
-              <p className="text-muted-foreground">
-                Vores AI skaber engagerende tekst og vælger passende billeder til din præsentation.
-              </p>
-            </div>
-            <div className="p-6 rounded-2xl bg-white/50 backdrop-blur-sm border border-accent">
-              <h3 className="text-lg font-semibold mb-2">Professionelt Design</h3>
-              <p className="text-muted-foreground">
-                Automatisk layoutoptimering og designforslag baseret på dit indhold.
-              </p>
-            </div>
-            <div className="p-6 rounded-2xl bg-white/50 backdrop-blur-sm border border-accent">
-              <h3 className="text-lg font-semibold mb-2">Hurtig Redigering</h3>
-              <p className="text-muted-foreground">
-                Intuitivt interface der gør det nemt at tilpasse din præsentation.
-              </p>
-            </div>
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={handleCreatePresentation}
+              className="h-auto p-6 flex flex-col items-center gap-4 hover:bg-white/80 relative overflow-hidden"
+            >
+              <Wand2 className="h-8 w-8" />
+              <div>
+                <div className="font-semibold">Generer</div>
+                <div className="text-sm text-muted-foreground">
+                  Opret fra et enkelt prompt på få sekunder
+                </div>
+              </div>
+              <span className="absolute top-2 right-2 bg-green-100 text-green-800 text-xs px-2 py-1 rounded">
+                Populær
+              </span>
+            </Button>
+
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={handleCreatePresentation}
+              className="h-auto p-6 flex flex-col items-center gap-4 hover:bg-white/80"
+            >
+              <Upload className="h-8 w-8" />
+              <div>
+                <div className="font-semibold">Importer fil eller URL</div>
+                <div className="text-sm text-muted-foreground">
+                  Forbedre eksisterende dokumenter eller websider
+                </div>
+              </div>
+            </Button>
           </div>
         </div>
       </div>

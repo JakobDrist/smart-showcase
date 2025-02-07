@@ -82,7 +82,6 @@ serve(async (req) => {
     console.log('Created presentation:', presentation);
 
     for (const [index, slide] of outline.entries()) {
-      // Generate an engaging image for the slide
       const imagePrompt = `Create a modern, minimalist presentation slide background image for topic: ${slide.title}. The image should be subtle and not interfere with text overlay.`;
       
       const imageResponse = await fetch('https://api.openai.com/v1/images/generations', {
@@ -108,7 +107,6 @@ serve(async (req) => {
       const imageData = await imageResponse.json();
       const imageUrl = imageData.data[0].url;
 
-      // Download the image and upload to Supabase Storage
       const imageDownloadResponse = await fetch(imageUrl);
       const imageBlob = await imageDownloadResponse.blob();
       
@@ -129,7 +127,6 @@ serve(async (req) => {
         .from('presentation_images')
         .getPublicUrl(filePath);
 
-      // Stream content generation for each slide
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -137,7 +134,7 @@ serve(async (req) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
+          model: 'gpt-4',
           messages: [
             { 
               role: 'system', 
@@ -164,7 +161,6 @@ serve(async (req) => {
         await writer.write(encoder.encode(`data: ${JSON.stringify({ type: 'content', slide: index, content: chunk })}\n\n`));
       }
 
-      // Insert the slide with the streamed content
       const { error: slideError } = await supabase
         .from('slides')
         .insert({

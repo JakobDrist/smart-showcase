@@ -121,7 +121,7 @@ serve(async (req) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4o',
+          model: 'gpt-4o-mini',
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: `Generer indhold til præsentationsslide: ${slide.title}` }
@@ -137,7 +137,16 @@ serve(async (req) => {
       }
 
       const data = await response.json();
-      const contentData = JSON.parse(data.choices[0].message.content);
+      console.log('OpenAI response:', data);
+      
+      let contentData;
+      try {
+        contentData = JSON.parse(data.choices[0].message.content);
+      } catch (error) {
+        console.error('Error parsing OpenAI response:', error);
+        console.error('Raw response content:', data.choices[0].message.content);
+        throw new Error('Failed to parse OpenAI response');
+      }
 
       // Format the content based on the AI response
       const formattedContent = contentData.points.map(point => `• ${point}`).join('\n');
@@ -197,4 +206,3 @@ serve(async (req) => {
     );
   }
 });
-

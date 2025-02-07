@@ -32,7 +32,6 @@ const GenerationProgressPage = () => {
         setOutline(parsedOutline);
         setLanguage(languageParam);
         
-        // Start generation immediately
         setTimeout(() => {
           handleGeneratePresentation();
         }, 100);

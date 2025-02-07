@@ -9,14 +9,6 @@ interface OutlineItem {
   title: string;
 }
 
-interface StreamUpdate {
-  type: 'content' | 'slide-complete' | 'complete' | 'error';
-  slide?: number;
-  content?: string;
-  presentationId?: string;
-  message?: string;
-}
-
 export const usePresentation = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -69,84 +61,66 @@ export const usePresentation = () => {
   const handleGeneratePresentation = async () => {
     if (outline.length === 0) return;
 
-    console.log('Starting presentation generation with outline:', outline);
-    console.log('Language:', language);
-
     setIsGenerating(true);
     setGenerationStep("Forbereder præsentation...");
     setGenerationProgress(0);
     setSlideContent(new Array(outline.length).fill(''));
 
     try {
-      const response = await supabase.functions.invoke('generate-slides', {
-        body: { outline, language },
-        headers: { 'Accept': 'text/event-stream' },
+      // Opret først præsentationen
+      const { data: presentation, error: presentationError } = await supabase
+        .from('presentations')
+        .insert({ title: outline[0].title })
+        .select()
+        .single();
+
+      if (presentationError) throw presentationError;
+
+      // Generer og indsæt slides
+      for (let i = 0; i < outline.length; i++) {
+        setGenerationStep(`Genererer slide ${i + 1} af ${outline.length}`);
+        setGenerationProgress((i / outline.length) * 100);
+
+        const { error: slideError } = await supabase
+          .from('slides')
+          .insert({
+            presentation_id: presentation.id,
+            position: i,
+            title: outline[i].title,
+            content: "Genererer indhold...",
+            theme: 'dark',
+            layout: 'default',
+            accent_color: '#4ade80',
+            background_type: 'gradient',
+            gradient: 'linear-gradient(90deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.7) 100%)',
+          });
+
+        if (slideError) throw slideError;
+
+        // Generer indhold via Edge Function (dette kan ikke undgås da det kræver OpenAI)
+        const response = await supabase.functions.invoke('generate-slides', {
+          body: { slide: outline[i], language },
+        });
+
+        if (response.error) throw response.error;
+
+        // Opdater slide med genereret indhold
+        const { error: updateError } = await supabase
+          .from('slides')
+          .update({ content: response.data.content })
+          .eq('presentation_id', presentation.id)
+          .eq('position', i);
+
+        if (updateError) throw updateError;
+      }
+
+      setGenerationProgress(100);
+      setGenerationStep("Præsentation er færdig!");
+      toast({
+        title: "Præsentation genereret",
+        description: "Din præsentation er klar!",
       });
-
-      if (!response.data) {
-        throw new Error('Ingen data modtaget fra serveren');
-      }
-
-      const reader = new ReadableStreamDefaultReader(response.data as ReadableStream);
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.trim() === '') continue;
-          if (line.startsWith('data: ')) {
-            try {
-              const update: StreamUpdate = JSON.parse(line.slice(5));
-              console.log('Received update:', update);
-
-              switch (update.type) {
-                case 'content':
-                  if (typeof update.slide === 'number' && update.content) {
-                    setSlideContent(prev => {
-                      const newContent = [...prev];
-                      newContent[update.slide] = (newContent[update.slide] || '') + update.content;
-                      return newContent;
-                    });
-                    setGenerationProgress(((update.slide + 1) / outline.length) * 100);
-                    setGenerationStep(`Genererer slide ${update.slide + 1} af ${outline.length}`);
-                  }
-                  break;
-
-                case 'slide-complete':
-                  if (typeof update.slide === 'number') {
-                    setGenerationStep(`Forbereder slide ${update.slide + 2} af ${outline.length}`);
-                  }
-                  break;
-
-                case 'complete':
-                  if (update.presentationId) {
-                    setGenerationProgress(100);
-                    setGenerationStep("Præsentation er færdig!");
-                    toast({
-                      title: "Præsentation genereret",
-                      description: "Din præsentation er klar!",
-                    });
-                    navigate(`/editor/${update.presentationId}`);
-                  }
-                  break;
-
-                case 'error':
-                  throw new Error(update.message || 'Der opstod en ukendt fejl');
-              }
-            } catch (e) {
-              console.error('Error parsing stream update:', e);
-              throw e;
-            }
-          }
-        }
-      }
+      navigate(`/editor/${presentation.id}`);
     } catch (error) {
       console.error('Error generating presentation:', error);
       toast({

@@ -72,7 +72,7 @@ export const usePresentation = () => {
     if (outline.length === 0) return;
 
     setIsGenerating(true);
-    setGenerationStep("Genererer præsentation...");
+    setGenerationStep("Forbereder præsentation...");
     setGenerationProgress(0);
     setSlideContent(new Array(outline.length).fill(''));
 
@@ -107,25 +107,25 @@ export const usePresentation = () => {
                   if (typeof update.slide === 'number' && update.content) {
                     setSlideContent(prev => {
                       const newContent = [...prev];
-                      newContent[update.slide!] = (newContent[update.slide!] || '') + update.content;
+                      newContent[update.slide] = (newContent[update.slide] || '') + update.content;
                       return newContent;
                     });
                     setGenerationProgress(
-                      Math.min(100, ((update.slide! + 1) / outline.length) * 100)
+                      Math.min(100, ((update.slide + 1) / outline.length) * 100)
                     );
                   }
                   break;
                 
                 case 'slide-complete':
                   if (typeof update.slide === 'number') {
-                    setGenerationStep(`Slide ${update.slide + 1}/${outline.length} færdig`);
+                    setGenerationStep(`Genererer slide ${update.slide + 1} af ${outline.length}`);
                   }
                   break;
                 
                 case 'complete':
                   if (update.presentationId) {
                     setGenerationProgress(100);
-                    setGenerationStep("Præsentation færdig!");
+                    setGenerationStep("Præsentation er færdig!");
                     toast({
                       title: "Præsentation genereret",
                       description: "Din præsentation er klar!",

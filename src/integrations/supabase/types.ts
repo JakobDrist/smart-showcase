@@ -32,30 +32,42 @@ export type Database = {
       }
       slides: {
         Row: {
+          accent_color: string | null
+          background_image: string | null
           content: string
           created_at: string
           id: string
+          layout: string | null
           position: number
           presentation_id: string | null
           style: Json | null
+          theme: string | null
           title: string
         }
         Insert: {
+          accent_color?: string | null
+          background_image?: string | null
           content: string
           created_at?: string
           id?: string
+          layout?: string | null
           position: number
           presentation_id?: string | null
           style?: Json | null
+          theme?: string | null
           title: string
         }
         Update: {
+          accent_color?: string | null
+          background_image?: string | null
           content?: string
           created_at?: string
           id?: string
+          layout?: string | null
           position?: number
           presentation_id?: string | null
           style?: Json | null
+          theme?: string | null
           title?: string
         }
         Relationships: [

@@ -2,10 +2,16 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Image, Palette } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Progress } from "@/components/ui/progress";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const Editor = () => {
   const { toast } = useToast();
@@ -18,7 +24,6 @@ const Editor = () => {
   useEffect(() => {
     const loadPresentation = async () => {
       try {
-        // Load slides for the presentation
         const { data: slideData, error: slidesError } = await supabase
           .from('slides')
           .select('*')
@@ -28,13 +33,8 @@ const Editor = () => {
         if (slidesError) throw slidesError;
 
         if (slideData && slideData.length > 0) {
-          setSlides(slideData.map(slide => ({
-            id: slide.id,
-            title: slide.title,
-            content: slide.content,
-          })));
+          setSlides(slideData);
         } else {
-          // If no slides found, redirect to generate page
           toast({
             title: "Præsentation ikke fundet",
             description: "Vi kunne ikke finde den anmodede præsentation.",
@@ -59,19 +59,82 @@ const Editor = () => {
     }
   }, [presentationId, navigate, toast]);
 
-  const addSlide = () => {
-    setSlides([
-      ...slides,
-      {
-        id: slides.length + 1,
+  const addSlide = async () => {
+    const newPosition = slides.length;
+    const { data: newSlide, error } = await supabase
+      .from('slides')
+      .insert({
+        presentation_id: presentationId,
+        position: newPosition,
         title: "Ny slide",
         content: "Klik for at redigere",
-      },
-    ]);
+        theme: 'dark',
+        layout: 'default',
+        accent_color: '#9b87f5'
+      })
+      .select()
+      .single();
+
+    if (error) {
+      toast({
+        title: "Fejl",
+        description: "Der opstod en fejl ved tilføjelse af ny slide.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSlides([...slides, newSlide]);
     toast({
       title: "Slide tilføjet",
       description: "En ny slide er blevet tilføjet til din præsentation.",
     });
+  };
+
+  const updateSlide = async (slideId, updates) => {
+    const { error } = await supabase
+      .from('slides')
+      .update(updates)
+      .eq('id', slideId);
+
+    if (error) {
+      toast({
+        title: "Fejl",
+        description: "Der opstod en fejl ved opdatering af slide.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSlides(slides.map(slide => 
+      slide.id === slideId ? { ...slide, ...updates } : slide
+    ));
+  };
+
+  const generateImage = async (prompt) => {
+    try {
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/generate-image`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabase.supabaseKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt }),
+      });
+
+      if (!response.ok) throw new Error('Failed to generate image');
+
+      const data = await response.json();
+      return data.image;
+    } catch (error) {
+      console.error('Error generating image:', error);
+      toast({
+        title: "Fejl",
+        description: "Der opstod en fejl ved generering af billede.",
+        variant: "destructive",
+      });
+      return null;
+    }
   };
 
   const navigateSlides = (direction: "prev" | "next") => {
@@ -93,9 +156,12 @@ const Editor = () => {
     );
   }
 
+  const currentTheme = slides[currentSlide]?.theme || 'dark';
+  const currentAccentColor = slides[currentSlide]?.accent_color || '#9b87f5';
+
   return (
-    <div className="min-h-screen bg-muted flex flex-col">
-      <div className="flex justify-between items-center p-4 bg-white border-b">
+    <div className={`min-h-screen flex flex-col ${currentTheme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'}`}>
+      <div className="flex justify-between items-center p-4 bg-background/80 backdrop-blur-sm border-b">
         <Button
           variant="ghost"
           onClick={() => navigate('/generate')}
@@ -105,6 +171,22 @@ const Editor = () => {
           Tilbage
         </Button>
         <div className="flex gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <Palette className="mr-2 h-4 w-4" />
+                Tema
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => updateSlide(slides[currentSlide].id, { theme: 'dark' })}>
+                Mørkt tema
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => updateSlide(slides[currentSlide].id, { theme: 'light' })}>
+                Lyst tema
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button onClick={addSlide} variant="outline">
             <Plus className="mr-2 h-4 w-4" />
             Tilføj slide
@@ -113,7 +195,7 @@ const Editor = () => {
       </div>
 
       <div className="flex-1 flex">
-        <div className="w-64 bg-white border-r p-4">
+        <div className="w-64 bg-background/80 backdrop-blur-sm border-r p-4">
           <div className="space-y-2">
             {slides.map((slide, index) => (
               <div
@@ -121,11 +203,15 @@ const Editor = () => {
                 onClick={() => setCurrentSlide(index)}
                 className={`p-4 rounded-lg cursor-pointer transition-all ${
                   currentSlide === index
-                    ? "bg-primary text-white"
+                    ? "bg-primary text-primary-foreground"
                     : "bg-accent hover:bg-accent/80"
                 }`}
+                style={{
+                  borderLeft: `4px solid ${slide.accent_color || currentAccentColor}`
+                }}
               >
                 <h4 className="font-medium truncate">Slide {index + 1}</h4>
+                <p className="text-sm opacity-70 truncate">{slide.title}</p>
               </div>
             ))}
           </div>
@@ -134,20 +220,40 @@ const Editor = () => {
         <div className="flex-1 p-8">
           {slides.length > 0 && (
             <>
-              <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-lg aspect-[16/9] p-8">
-                <div
-                  contentEditable
-                  className="text-4xl font-bold mb-4 focus:outline-none"
-                  suppressContentEditableWarning
-                >
-                  {slides[currentSlide].title}
-                </div>
-                <div
-                  contentEditable
-                  className="text-xl focus:outline-none"
-                  suppressContentEditableWarning
-                >
-                  {slides[currentSlide].content}
+              <div 
+                className={`max-w-4xl mx-auto rounded-xl shadow-2xl overflow-hidden ${
+                  currentTheme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                }`}
+                style={{
+                  aspectRatio: '16/9',
+                  backgroundImage: slides[currentSlide].background_image ? 
+                    `url(${slides[currentSlide].background_image})` : 'none',
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                }}
+              >
+                <div className="h-full w-full backdrop-blur-sm bg-background/40 p-12">
+                  <div
+                    contentEditable
+                    className="text-5xl font-bold mb-8 focus:outline-none"
+                    style={{ color: currentAccentColor }}
+                    suppressContentEditableWarning
+                    onBlur={(e) => updateSlide(slides[currentSlide].id, { 
+                      title: e.target.textContent 
+                    })}
+                  >
+                    {slides[currentSlide].title}
+                  </div>
+                  <div
+                    contentEditable
+                    className="text-xl leading-relaxed focus:outline-none"
+                    suppressContentEditableWarning
+                    onBlur={(e) => updateSlide(slides[currentSlide].id, { 
+                      content: e.target.textContent 
+                    })}
+                  >
+                    {slides[currentSlide].content}
+                  </div>
                 </div>
               </div>
 
@@ -159,7 +265,9 @@ const Editor = () => {
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <span className="py-2 px-4 bg-white rounded-lg">
+                <span className={`py-2 px-4 rounded-lg ${
+                  currentTheme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                }`}>
                   {currentSlide + 1} / {slides.length}
                 </span>
                 <Button

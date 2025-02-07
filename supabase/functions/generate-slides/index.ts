@@ -23,7 +23,6 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -37,7 +36,6 @@ serve(async (req) => {
 
     console.log('Received request with outline:', outline);
 
-    // Create a new presentation record
     const { data: presentation, error: presentationError } = await supabase
       .from('presentations')
       .insert({ title: outline[0].title })
@@ -51,15 +49,68 @@ serve(async (req) => {
 
     console.log('Created presentation:', presentation);
 
-    // Generate content for each slide
     const slides = [];
     for (const [index, slide] of outline.entries()) {
+      // Generate an engaging image for the slide
+      const imagePrompt = `Create a modern, minimalist presentation slide background image for topic: ${slide.title}. The image should be subtle and not interfere with text overlay.`;
+      
+      const imageResponse = await fetch('https://api.openai.com/v1/images/generations', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openAIApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: "dall-e-3",
+          prompt: imagePrompt,
+          n: 1,
+          size: "1024x1024",
+        }),
+      });
+
+      if (!imageResponse.ok) {
+        const error = await imageResponse.text();
+        console.error('OpenAI Image API error:', error);
+        throw new Error(`OpenAI Image API error: ${error}`);
+      }
+
+      const imageData = await imageResponse.json();
+      const imageUrl = imageData.data[0].url;
+
+      // Download the image and upload to Supabase Storage
+      const imageDownloadResponse = await fetch(imageUrl);
+      const imageBlob = await imageDownloadResponse.blob();
+      
+      const filePath = `${crypto.randomUUID()}.png`;
+      const { error: uploadError } = await supabase.storage
+        .from('presentation_images')
+        .upload(filePath, imageBlob, {
+          contentType: 'image/png',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Storage upload error:', uploadError);
+        throw uploadError;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('presentation_images')
+        .getPublicUrl(filePath);
+
+      // Generate enhanced content for the slide
       const systemPrompt = `Du er en professionel præsentationsekspert.
       Generer indhold til et slide med titlen "${slide.title}".
       Sproget skal være på ${language === 'da' ? 'dansk' : 'engelsk'}.
-      Indholdet skal være kortfattet og præcist, perfekt til en præsentation.
-      Formater teksten med simple markdown bullet points.
-      Maksimalt 5 bullet points.`;
+      Formater indholdet som et JSON objekt med følgende struktur:
+      {
+        "points": ["punkt 1", "punkt 2", ...],
+        "diagram": null eller "pie", "bar", "line" hvis datavisualisering er relevant,
+        "data": hvis diagram ikke er null, inkluder relevant data for diagrammet,
+        "layout": "grid", "vertical", eller "horizontal" baseret på indholdet
+      }
+      Maksimalt 5 bullet points.
+      Sørg for at punkterne er korte og præcise.`;
 
       console.log(`Generating content for slide ${index + 1}:`, slide.title);
 
@@ -86,23 +137,32 @@ serve(async (req) => {
       }
 
       const data = await response.json();
-      const content = data.choices[0].message.content;
+      const contentData = JSON.parse(data.choices[0].message.content);
 
-      console.log(`Generated content for slide ${index + 1}:`, content);
+      // Format the content based on the AI response
+      const formattedContent = contentData.points.map(point => `• ${point}`).join('\n');
 
-      // Insert the slide into database
+      // Insert the slide with enhanced styling
       const { error: slideError } = await supabase
         .from('slides')
         .insert({
           presentation_id: presentation.id,
           position: index,
           title: slide.title,
-          content: content,
+          content: formattedContent,
+          background_image: publicUrl,
+          background_type: 'image',
           style: {
-            titleColor: '#1a1a1a',
-            contentColor: '#4a4a4a',
-            fontSize: 'text-lg',
-          }
+            titleColor: '#ffffff',
+            contentColor: '#ffffff',
+            fontSize: 'text-xl',
+            diagram: contentData.diagram,
+            diagramData: contentData.data,
+            layout: contentData.layout,
+          },
+          bullet_style: 'circle',
+          grid_layout: contentData.layout || 'vertical',
+          gradient: 'linear-gradient(90deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.6) 100%)',
         });
 
       if (slideError) {
@@ -112,7 +172,13 @@ serve(async (req) => {
       
       slides.push({
         title: slide.title,
-        content: content,
+        content: formattedContent,
+        background_image: publicUrl,
+        style: {
+          diagram: contentData.diagram,
+          diagramData: contentData.data,
+          layout: contentData.layout,
+        }
       });
     }
 

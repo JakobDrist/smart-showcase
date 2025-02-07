@@ -20,7 +20,8 @@ serve(async (req) => {
     const systemPrompt = `Du er en professionel præsentationsekspert. 
     Generer en disposition med ${slideCount} punkter til en præsentation på ${language === 'da' ? 'dansk' : 'engelsk'}.
     Dispositionen skal være velstruktureret og professionel.
-    Formater hvert punkt som et JSON objekt med et id og en title.`;
+    Formater hvert punkt som et JSON objekt med et id og en title.
+    Svar kun med et JSON array.`;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -29,13 +30,19 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: prompt }
         ],
+        temperature: 0.7,
       }),
     });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error?.message || 'Error calling OpenAI API');
+    }
 
     const data = await response.json();
     const outlineText = data.choices[0].message.content;
@@ -44,6 +51,9 @@ serve(async (req) => {
     let outline;
     try {
       outline = JSON.parse(outlineText);
+      if (!Array.isArray(outline)) {
+        throw new Error('Response is not an array');
+      }
     } catch (e) {
       // If parsing fails, try to extract array from the text
       const match = outlineText.match(/\[[\s\S]*\]/);
